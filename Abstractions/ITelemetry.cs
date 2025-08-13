@@ -10,7 +10,7 @@ namespace NT8.SDK
         /// <summary>
         /// Emits a telemetry event.
         /// </summary>
-        /// <param name="evt">Event to record.</param>
+        /// <param name="evt">Event to log.</param>
         void Emit(TelemetryEvent evt);
     }
 }
