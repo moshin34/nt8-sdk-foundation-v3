@@ -1,4 +1,5 @@
 # NT8 Core SDK – Prop Firm & Micro Account Trading
+![NT8 Guard](https://github.com/moshin34/nt8-sdk-foundation-v3/actions/workflows/nt8-guard.yml/badge.svg)
 
 ## Overview
 Institutional-grade, risk-compliant NinjaTrader 8 SDK for automated futures trading.
