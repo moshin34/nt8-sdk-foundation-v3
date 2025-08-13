@@ -69,7 +69,8 @@ namespace NT8.SDK.Risk
     }
 
 #if DEBUG
-    internal sealed class FakeRiskAllow : IRisk
+    // Renamed to avoid collisions with other files.
+    internal sealed class DbgFakeRiskAllowComposite : IRisk
     {
         public RiskMode Mode { get { return RiskMode.DCP; } }
         public RiskLockoutState Lockout() { return RiskLockoutState.None; }
@@ -111,13 +112,13 @@ namespace NT8.SDK.Risk
     {
         internal static void Main()
         {
-            var composite = new CompositeRisk(new IRisk[] { new FakeRiskAllow(), new FakeRiskBlock("RULE_X") }, RiskMode.DCP);
+            var composite = new CompositeRisk(new IRisk[] { new DbgFakeRiskAllowComposite(), new FakeRiskBlock("RULE_X") }, RiskMode.DCP);
             Console.WriteLine("Entry decision: '" + composite.EvaluateEntry(new PositionIntent("ES", PositionSide.Long)) + "'");
 
-            var cooling = new CompositeRisk(new IRisk[] { new FakeRiskAllow(), new FakeRiskCooling() }, RiskMode.DCP);
+            var cooling = new CompositeRisk(new IRisk[] { new DbgFakeRiskAllowComposite(), new FakeRiskCooling() }, RiskMode.DCP);
             Console.WriteLine("Lockout state (cooling): " + cooling.Lockout());
 
-            var locked = new CompositeRisk(new IRisk[] { new FakeRiskAllow(), new FakeRiskCooling(), new FakeRiskLocked() }, RiskMode.DCP);
+            var locked = new CompositeRisk(new IRisk[] { new DbgFakeRiskAllowComposite(), new FakeRiskCooling(), new FakeRiskLocked() }, RiskMode.DCP);
             Console.WriteLine("Lockout state (locked): " + locked.Lockout());
         }
     }

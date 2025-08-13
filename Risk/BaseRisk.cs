@@ -32,9 +32,10 @@ namespace NT8.SDK.Risk
     }
 
 #if DEBUG
-    internal sealed class FakeRiskAllow : BaseRisk
+    // Renamed to avoid collisions with other files.
+    internal sealed class DbgFakeRiskAllowBase : BaseRisk
     {
-        public FakeRiskAllow() : base(RiskMode.DCP) { }
+        public DbgFakeRiskAllowBase() : base(RiskMode.DCP) { }
         public override string EvaluateEntry(PositionIntent intent) { return string.Empty; }
     }
 
@@ -42,7 +43,7 @@ namespace NT8.SDK.Risk
     {
         internal static void Main()
         {
-            var risk = new FakeRiskAllow();
+            var risk = new DbgFakeRiskAllowBase();
             Console.WriteLine("Mode: " + risk.Mode);
             Console.WriteLine("CanTrade: " + risk.CanTradeNow());
             Console.WriteLine("EvaluateEntry: '" + risk.EvaluateEntry(new PositionIntent("ES", PositionSide.Long)) + "'");
