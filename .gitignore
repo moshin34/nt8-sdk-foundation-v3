@@ -1,4 +1,3 @@
-@"
 # Visual Studio
 .vs/
 *.user
@@ -14,4 +13,3 @@ TestResults/
 # Caches / logs
 *.cache
 *.log
-"@ | Set-Content -Encoding UTF8 .gitignore
