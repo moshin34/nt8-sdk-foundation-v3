@@ -1,5 +1,4 @@
 using System;
-using NT8.SDK;         // for IClock
 using NT8.SDK.Risk;
 using NT8.SDK.Sizing;
 using NT8.SDK.Session;
@@ -11,41 +10,25 @@ namespace NT8.SDK.Facade
     public sealed class SdkBuilder
     {
         private RiskMode _mode = RiskMode.PCP;
-        private readonly RiskOptions _riskOptions = new RiskOptions();
-        private IClock _clock; // null => SystemClock inside components
+        private int _lossStreakLockout = 2;
+        private TimeSpan _lockoutDuration = TimeSpan.FromMinutes(15);
+        private IClock _clock = SystemClock.Instance;
+        private IOrders _orders = new Orders.NullOrders();
 
-        public SdkBuilder WithMode(RiskMode mode)
-        {
-            _mode = mode;
-            return this;
-        }
-
-        public SdkBuilder WithLossStreakLockout(int losses)
-        {
-            _riskOptions.LossStreakLockout = losses;
-            return this;
-        }
-
-        public SdkBuilder WithLockoutDuration(TimeSpan duration)
-        {
-            _riskOptions.LockoutDuration = duration;
-            return this;
-        }
-
-        /// <summary>Inject a custom UTC clock for deterministic tests/UIs.</summary>
-        public SdkBuilder WithClock(IClock clock)
-        {
-            _clock = clock;
-            return this;
-        }
+        public SdkBuilder WithMode(RiskMode mode) { _mode = mode; return this; }
+        public SdkBuilder WithLossStreakLockout(int value) { if (value > 0) _lossStreakLockout = value; return this; }
+        public SdkBuilder WithLockoutDuration(TimeSpan duration) { if (duration.TotalSeconds > 0) _lockoutDuration = duration; return this; }
+        public SdkBuilder WithClock(IClock clock) { _clock = clock ?? SystemClock.Instance; return this; }
+        public SdkBuilder WithOrders(IOrders orders) { _orders = orders ?? new Orders.NullOrders(); return this; }
 
         public ISdk Build()
         {
+            var riskOptions = new RiskOptions(_lossStreakLockout, _lockoutDuration);
             return new Sdk(
-                orders: new Orders.NullOrders(),
-                risk: new RiskEngine(_mode, _riskOptions, _clock),
+                orders: _orders,
+                risk: new RiskEngine(_mode, riskOptions, _clock),
                 sizing: new SizeEngine(),
-                session: new CmeBlackoutService(_clock), // use the same clock
+                session: new CmeBlackoutService(_clock),
                 trailing: new TrailingEngine(),
                 telemetry: new Telemetry.NoopTelemetry(),
                 diagnostics: new Diagnostics.NoopDiagnostics(),
@@ -53,3 +36,4 @@ namespace NT8.SDK.Facade
         }
     }
 }
+
