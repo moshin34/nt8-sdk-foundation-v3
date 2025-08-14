@@ -21,6 +21,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <DocumentationFile>bin\Debug\SDK.xml</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -110,4 +111,9 @@
     <Compile Include="TrailProfiles.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>xcopy "$(TargetPath)" "%25USERPROFILE%25\Documents\NinjaTrader 8\bin\Custom\" /Y
+xcopy "$(TargetDir)$(TargetName).xml" "%25USERPROFILE%25\Documents\NinjaTrader 8\bin\Custom\" /Y
+</PostBuildEvent>
+  </PropertyGroup>
 </Project>
