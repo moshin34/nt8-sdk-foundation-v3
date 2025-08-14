@@ -11,11 +11,20 @@ namespace NT8.SDK.Session
     {
         private readonly CmeCalendar _calendar;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CmeBlackoutService"/> class and loads the calendar seed.
+        /// </summary>
         public CmeBlackoutService()
         {
             _calendar = CmeCalendarLoader.Load();
         }
 
+        /// <summary>
+        /// Returns <c>true</c> if the provided ET timestamp falls within any configured blackout range for the symbol.
+        /// </summary>
+        /// <param name="etNow">Current time in US/Eastern.</param>
+        /// <param name="symbol">Instrument symbol (e.g., "NQ").</param>
+        /// <returns><c>true</c> if in a blackout range; otherwise <c>false</c>.</returns>
         public bool IsBlackout(DateTime etNow, string symbol)
         {
             var day = FindDay(etNow, symbol);
@@ -33,6 +42,12 @@ namespace NT8.SDK.Session
             return false;
         }
 
+        /// <summary>
+        /// Returns <c>true</c> if the provided ET timestamp falls within the configured settlement window for the symbol.
+        /// </summary>
+        /// <param name="etNow">Current time in US/Eastern.</param>
+        /// <param name="symbol">Instrument symbol (e.g., "NQ").</param>
+        /// <returns><c>true</c> if in the settlement window; otherwise <c>false</c>.</returns>
         public bool IsSettlementWindow(DateTime etNow, string symbol)
         {
             var day = FindDay(etNow, symbol);
@@ -46,12 +61,22 @@ namespace NT8.SDK.Session
             return CmeCalendarLoader.InRange(tod, s, e);
         }
 
+        /// <summary>
+        /// Returns a conservative placeholder RTH session open time (09:00 ET) for the provided key’s date.
+        /// </summary>
+        /// <param name="key">Session key (symbol + named session).</param>
+        /// <returns>Session open time in ET.</returns>
         public DateTime SessionOpen(SessionKey key)
         {
             var d = etNowToday();
             return new DateTime(d.Year, d.Month, d.Day, 9, 0, 0);
         }
 
+        /// <summary>
+        /// Returns a conservative placeholder RTH session close time (16:00 ET) for the provided key’s date.
+        /// </summary>
+        /// <param name="key">Session key (symbol + named session).</param>
+        /// <returns>Session close time in ET.</returns>
         public DateTime SessionClose(SessionKey key)
         {
             var d = etNowToday();
