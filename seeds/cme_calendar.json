@@ -1,0 +1,10 @@
+{
+  "Symbols": [
+    {
+      "Symbol": "NQ",
+      "Days": [
+        { "Date": "2025-08-13", "Settlement": "16:00-16:45", "Blackouts": ["16:00-16:05"] }
+      ]
+    }
+  ]
+}
