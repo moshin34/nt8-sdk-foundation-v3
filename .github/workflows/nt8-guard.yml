@@ -24,18 +24,97 @@ jobs:
       - name: Install Mono (ensure mcs exists)
         run: |
           sudo apt-get update
-          sudo apt-get install -y mono-devel mono-mcs || sudo apt-get install -y mono-complete
-          mono --version || true
+          sudo apt-get install -y mono-complete
           mcs -version || true
+          mono --version || true
 
-      - name: Build Step 1 (Abstractions only)
+      - name: Build Step 1 (Abstractions)
         run: |
           mkdir -p build
           mcs -langversion:7.2 -target:library Abstractions/*.cs -out:build/sdk.abstractions.dll
 
-      - name: Upload Build
+      - name: Build Step 2 (Config + Session)
+        run: |
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs Config/*.cs Session/*.cs \
+            -r:/usr/lib/mono/4.5/System.Web.Extensions.dll \
+            -out:build/sdk.step2.dll
+
+      - name: Build Step 3 (Risk)
+        run: |
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs Risk/*.cs \
+            -out:build/sdk.step3.dll
+
+      - name: Build Step 4a (Sizing)
+        run: |
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs Sizing/*.cs \
+            -out:build/sdk.step4.sizing.dll
+
+      - name: Build Step 4b (Trailing)
+        run: |
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs Trailing/*.cs \
+            -out:build/sdk.step4.trailing.dll
+
+      - name: Build Step 5 (Façade aggregate)
+        run: |
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs \
+            Config/*.cs Session/*.cs \
+            Risk/*.cs Sizing/*.cs Trailing/*.cs \
+            Telemetry/*.cs Diagnostics/*.cs Orders/*.cs Facade/*.cs QA.TestKit/*.cs \
+            -r:/usr/lib/mono/4.5/System.Web.Extensions.dll \
+            -out:build/sdk.step5.facade.dll
+
+      - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step1-build
-          path: build/
+          name: nt8-sdk-builds
+          path: |
+            build/sdk.abstractions.dll
+            build/sdk.step2.dll
+            build/sdk.step3.dll
+            build/sdk.step4.sizing.dll
+            build/sdk.step4.trailing.dll
+            build/sdk.step5.facade.dll
+
+      - name: Build QuickStart (DEBUG)
+        run: |
+          mcs -langversion:7.2 -define:DEBUG \
+            -r:build/sdk.step5.facade.dll \
+            -target:exe Harness/QuickStartRunner.cs Harness/QuickStartProgram.cs \
+            -out:build/QuickStart.exe
+
+      - name: Run QuickStart smoke
+        run: |
+          set -euo pipefail
+          mono build/QuickStart.exe | tee build/quickstart.log
+          # Expect lockout immediately after two losses
+          grep -q "After 2 losses -> CanTradeNow=False" build/quickstart.log
+          # Expect trading permitted after cooldown advance
+          grep -q "After cooldown -> CanTradeNow=True" build/quickstart.log
+
+      - name: Verify Entry Gate (settlement and OK cases)
+        run: |
+          grep -q "Settlement gate (16:05 ET): settlement window" build/quickstart.log
+          grep -q "Settlement gate (15:00 ET): OK" build/quickstart.log
+
+      - name: Verify Entry Planner output
+        run: |
+          grep -q "EntryPlan: accepted=True" build/quickstart.log
+          grep -q "stopType=StopMarket" build/quickstart.log
+
+      - name: Verify Entry Planner rounding and bad-price validation
+        run: |
+          grep -q "EntryPlan stop numeric check: stop=19990" build/quickstart.log
+          grep -q "EntryPlan(bad price): accepted=False" build/quickstart.log
+
+      - name: Upload QuickStart log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickstart-log
+          path: build/quickstart.log
