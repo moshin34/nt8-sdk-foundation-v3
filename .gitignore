@@ -1,0 +1,17 @@
+@"
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# Build outputs
+bin/
+obj/
+TestResults/
+*.opendb
+
+# Caches / logs
+*.cache
+*.log
+"@ | Set-Content -Encoding UTF8 .gitignore
