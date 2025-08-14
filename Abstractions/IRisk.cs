@@ -2,9 +2,7 @@ using System;
 
 namespace NT8.SDK
 {
-    /// <summary>
-    /// Defines a risk management engine (pure C#; no NT8 types).
-    /// </summary>
+    /// <summary>Defines a risk management engine.</summary>
     public interface IRisk
     {
         /// <summary>Active risk mode.</summary>
@@ -18,13 +16,11 @@ namespace NT8.SDK
 
         /// <summary>
         /// Evaluate an entry. Return EMPTY STRING ("") if accepted; otherwise a rejection reason.
-        /// NOTE: Implementations must NOT return null; use "" to indicate acceptance.
+        /// Implementations must not return null.
         /// </summary>
         string EvaluateEntry(PositionIntent intent);
 
-        /// <summary>
-        /// Record the outcome of the most recent trade for streak tracking and controls.
-        /// </summary>
+        /// <summary>Record the outcome of the most recent trade.</summary>
         void RecordWinLoss(bool win);
     }
 }

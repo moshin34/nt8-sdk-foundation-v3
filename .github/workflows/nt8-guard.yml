@@ -1,19 +1,41 @@
 name: NT8 Guard
+
 on:
-  pull_request:
-    branches: [ main, master ]
   push:
     branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
 jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
+          python-version: '3.11'
+
       - name: Run NT8 Guard
+        run: python tools/nt8_guard.py --fail-on-warn
+
+      - name: Install Mono (ensure mcs exists)
         run: |
-          python tools/nt8_guard.py --fail-on-warn
+          sudo apt-get update
+          sudo apt-get install -y mono-devel mono-mcs || sudo apt-get install -y mono-complete
+          mono --version || true
+          mcs -version || true
+
+      - name: Build Step 1 (Abstractions only)
+        run: |
+          mkdir -p build
+          mcs -langversion:7.2 -target:library Abstractions/*.cs -out:build/sdk.abstractions.dll
+
+      - name: Upload Build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step1-build
+          path: build/
