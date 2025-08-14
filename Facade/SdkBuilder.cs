@@ -23,7 +23,12 @@ namespace NT8.SDK.Facade
 
         public ISdk Build()
         {
-            var riskOptions = new RiskOptions(_lossStreakLockout, _lockoutDuration);
+            var riskOptions = new RiskOptions
+            {
+                LossStreakLockout = _lossStreakLockout,
+                LockoutDuration = _lockoutDuration
+            };
+
             return new Sdk(
                 orders: _orders,
                 risk: new RiskEngine(_mode, riskOptions, _clock),
