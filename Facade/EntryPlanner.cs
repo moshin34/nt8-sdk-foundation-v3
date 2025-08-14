@@ -1,4 +1,5 @@
 using System;
+using NT8.SDK.Session;
 
 namespace NT8.SDK.Facade
 {
@@ -9,6 +10,8 @@ namespace NT8.SDK.Facade
         /// Plans a simple entry + protective stop.
         /// Returns <see cref="EntryPlan.Accepted"/> = true with populated orders when allowed,
         /// otherwise <see cref="EntryPlan.Reason"/> explains the block.
+        /// Caller passes ET in <paramref name="etNow"/> (no timezone conversions).
+        /// Logs deterministic session decisions via <see cref="ISdk.Diagnostics"/>.
         /// </summary>
         public static EntryPlan Build(
             ISdk sdk,
@@ -20,11 +23,36 @@ namespace NT8.SDK.Facade
             TrailingProfile trailingProfile,
             decimal tickSize = 1m)
         {
-            // Basic gate
+            if (sdk == null) return new EntryPlan { Accepted = false, Reason = "sdk missing" };
+            if (string.IsNullOrEmpty(symbol)) return new EntryPlan { Accepted = false, Reason = "symbol missing" };
+            if (side == PositionSide.Flat) return new EntryPlan { Accepted = false, Reason = "flat intent" };
+
             var intent = new PositionIntent(symbol, side);
-            var reason = EntryGates.CheckEntry(sdk, etNow, intent);
-            if (!string.IsNullOrEmpty(reason))
-                return new EntryPlan { Accepted = false, Reason = reason };
+
+            // Risk gate
+            var riskReason = sdk.Risk != null ? sdk.Risk.EvaluateEntry(intent) : string.Empty;
+            if (!string.IsNullOrEmpty(riskReason))
+                return new EntryPlan { Accepted = false, Reason = riskReason };
+
+            // Session gate
+            TimeRange? settlement = null;
+            TimeRange[] blackouts = new TimeRange[0];
+            var cme = sdk.Session as CmeBlackoutService;
+            if (cme != null)
+            {
+                settlement = cme.SettlementRange(etNow, symbol);
+                blackouts = cme.BlackoutRanges(etNow, symbol);
+            }
+
+            var gate = new SettlementGate(settlement, blackouts);
+            var block = gate.Blocking(etNow);
+            if (sdk.Diagnostics != null && sdk.Diagnostics.Enabled)
+            {
+                var msg = block.HasValue ? "session BLOCKED: " + block.Value.ToString() : "session OK";
+                sdk.Diagnostics.Capture(msg, "session");
+            }
+            if (block.HasValue)
+                return new EntryPlan { Accepted = false, Reason = "session window" };
 
             // Sizing
             var size = sdk.Sizing.Decide(sdk.Risk.Mode, intent);
@@ -88,3 +116,4 @@ namespace NT8.SDK.Facade
         }
     }
 }
+

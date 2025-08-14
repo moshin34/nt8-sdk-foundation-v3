@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NT8.SDK;                 // SessionKey, IClock, SystemClock
 using NT8.SDK.Config;          // CmeCalendar, CmeCalendarLoader
 
@@ -9,6 +10,7 @@ namespace NT8.SDK.Session
     /// - Assumes caller passes times in US/Eastern.
     /// - Uses an injected <see cref="IClock"/> (defaults to <see cref="SystemClock.Instance"/>)
     ///   for deterministic "today" anchoring of placeholder session open/close.
+    /// Provides parsed time ranges for settlement and blackouts.
     /// </summary>
     public sealed class CmeBlackoutService : ISession
     {
@@ -27,48 +29,71 @@ namespace NT8.SDK.Session
             _calendar = CmeCalendarLoader.Load(); // never throws; normalized arrays
         }
 
-        public bool IsBlackout(DateTime etNow, string symbol)
+        /// <summary>Returns blackout windows for the ET date.</summary>
+        public TimeRange[] BlackoutRanges(DateTime etNow, string symbol)
         {
             var day = FindDay(etNow, symbol);
-            if (day == null || day.Blackouts == null) return false;
+            if (day == null || day.Blackouts == null) return new TimeRange[0];
 
-            var tod = etNow.TimeOfDay;
+            var list = new List<TimeRange>();
             for (int i = 0; i < day.Blackouts.Length; i++)
             {
                 TimeSpan s, e;
                 if (CmeCalendarLoader.TryParseRange(day.Blackouts[i], out s, out e))
-                {
-                    if (CmeCalendarLoader.InRange(tod, s, e)) return true;
-                }
+                    list.Add(new TimeRange(s, e));
             }
-            return false;
+            return list.ToArray();
+        }
+
+        /// <summary>Returns the settlement window for the ET date, or null when none.</summary>
+        public TimeRange? SettlementRange(DateTime etNow, string symbol)
+        {
+            var day = FindDay(etNow, symbol);
+            if (day == null) return null;
+
+            TimeSpan s, e;
+            if (!CmeCalendarLoader.TryParseRange(day.Settlement, out s, out e))
+                return null;
+
+            return new TimeRange(s, e);
+        }
+
+        public bool IsBlackout(DateTime etNow, string symbol)
+        {
+            return IsWithin(etNow, BlackoutRanges(etNow, symbol));
         }
 
         public bool IsSettlementWindow(DateTime etNow, string symbol)
         {
-            var day = FindDay(etNow, symbol);
-            if (day == null) return false;
+            var range = SettlementRange(etNow, symbol);
+            return range.HasValue && range.Value.Contains(etNow.TimeOfDay);
+        }
 
-            TimeSpan s, e;
-            if (!CmeCalendarLoader.TryParseRange(day.Settlement, out s, out e))
-                return false;
-
-            var tod = etNow.TimeOfDay;
-            return CmeCalendarLoader.InRange(tod, s, e);
+        /// <summary>
+        /// Returns true if <paramref name="etTime"/> falls within any of the ranges.
+        /// </summary>
+        internal static bool IsWithin(DateTime etTime, TimeRange[] ranges)
+        {
+            var t = etTime.TimeOfDay;
+            for (int i = 0; i < ranges.Length; i++)
+            {
+                if (ranges[i].Contains(t)) return true;
+            }
+            return false;
         }
 
         public DateTime SessionOpen(SessionKey key)
         {
             // Conservative placeholder RTH open (09:00 ET) using clock-anchored "today".
             var d = _clock.UtcNow; // caller passes ET elsewhere; here we only need a stable "day"
-            return new DateTime(d.Year, d.Month, d.Day, 9, 0, 0);
+            return new DateTime(d.Year, d.Month, d.Day, 9, 0, 0); // TODO VERIFY CME
         }
 
         public DateTime SessionClose(SessionKey key)
         {
             // Conservative placeholder RTH close (16:00 ET) using clock-anchored "today".
             var d = _clock.UtcNow;
-            return new DateTime(d.Year, d.Month, d.Day, 16, 0, 0);
+            return new DateTime(d.Year, d.Month, d.Day, 16, 0, 0); // TODO VERIFY CME
         }
 
         private CmeDay FindDay(DateTime etNow, string symbol)
@@ -94,3 +119,4 @@ namespace NT8.SDK.Session
         }
     }
 }
+
