@@ -1,0 +1,14 @@
+,Area,Status,Present Folders,Symbols Found,Missing Must-Haves,Keyword Evidence (samples)
+11,Documentation / Compile Target,Missing,,,"README.md, compile-target.md",
+10,Tooling / CI / Guardrails,Missing,,,nt8_guard.py,
+12,Acceptance Gates & Metrics,Partial,,,"acceptance.json, acceptance.schema.json",MAR
+8,QA Harness (Backtest/WF/MC),Partial,,"BacktestHarness, QuickStartRunner, WalkForwardRunner",MonteCarlo,"bootstrap, walk-forward"
+1,SDK Facade & Defaults,Partial,,"Defaults, SdkCapabilities, SdkFacade",SdkAdapter,
+5,Session & CME Calendar,Partial,,"ISession, SessionCalendar","Blackout, Cme",settlement
+9,Strategies (Thin Shells),Partial,,"CrabelORBStrategy, StrategyBase, TemplateStrategy",ORB,"attempts, cooldown, opening range, session"
+0,USI / Abstractions,Partial,,"IBacktestHooks, IDiagnostics, IOrders, IRisk, ISdk, ISession, ISizing, ITelemetry, ITrailing",Dto,
+4,Orders Router & NT8 Adapter,Present,,"OCO, OrderIntent, OrderRouter",,OCO
+2,Risk Modes & Prop-Firm Rules,Present,,"CompositeRisk, DCP, ECP, HR, LossStreakGuard, PCP, RiskConfig, RiskEngine, RiskManager, RiskTiers",,lockout
+3,Sizing (Mode/Volatility-aware),Present,,"BracketedQuantitySizing, FixedQuantitySizing, ISizeRule, PositionSizer",,ATR
+7,Telemetry & Diagnostics,Present,,"DiagnosticsSwitch, IDiagnostics, ITelemetry, InMemoryDiagnostics, InMemoryTelemetry, PnLTracker, TradeLogger",,"JSON, diagnostics, log, telemetry"
+6,Trailing Profiles,Present,,"CompositeTrailingStop, FixedTicksTrailingStop, ITrailing, PercentTrailingStop",,"runner, step"
