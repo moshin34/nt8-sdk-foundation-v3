@@ -33,9 +33,24 @@ jobs:
           mkdir -p build
           mcs -langversion:7.2 -target:library Abstractions/*.cs -out:build/sdk.abstractions.dll
 
-      - name: Upload Build
+      - name: Build Step 2 (Config + Session)
+        run: |
+          mkdir -p build
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs Config/*.cs Session/*.cs \
+            -r:/usr/lib/mono/4.5/System.Web.Extensions.dll \
+            -out:build/sdk.step2.dll
+
+      - name: Upload Step 1 Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: step1-build
-          path: build/
+          path: build/sdk.abstractions.dll
+
+      - name: Upload Step 2 Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step2-build
+          path: build/sdk.step2.dll
