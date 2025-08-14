@@ -39,3 +39,17 @@ jobs:
         with:
           name: step1-build
           path: build/
+
+      - name: Build Step 3 (Risk)
+        run: |
+          mkdir -p build
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs Risk/*.cs \
+            -out:build/sdk.step3.dll
+
+      - name: Upload Step 3 Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step3-build
+          path: build/sdk.step3.dll
