@@ -2,10 +2,15 @@ using System;
 
 namespace NT8.SDK.Risk
 {
-    /// <summary>Simple risk thresholds; constants for Step 3.</summary>
+    /// <summary>
+    /// Defaults for the risk engine. Runtime overrides are provided via <see cref="RiskOptions"/>.
+    /// </summary>
     public static class RiskConfig
     {
-        public const int LossStreakLockout = 3;      // lockout after N consecutive losses
-        public static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+        /// <summary>Default maximum allowed consecutive losses before lockout.</summary>
+        public const int LossStreakLockoutDefault = 2;
+
+        /// <summary>Default duration of lockout once triggered.</summary>
+        public static readonly TimeSpan LockoutDurationDefault = TimeSpan.FromMinutes(15);
     }
 }

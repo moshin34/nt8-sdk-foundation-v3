@@ -1,30 +1,32 @@
 using System;
-using NT8.SDK.Config;
+using NT8.SDK;                 // SessionKey, IClock, SystemClock
+using NT8.SDK.Config;          // CmeCalendar, CmeCalendarLoader
 
 namespace NT8.SDK.Session
 {
     /// <summary>
     /// Session/blackout logic backed by a simple CME calendar seed.
-    /// Assumes caller passes times in US/Eastern.
+    /// - Assumes caller passes times in US/Eastern.
+    /// - Uses an injected <see cref="IClock"/> (defaults to <see cref="SystemClock.Instance"/>)
+    ///   for deterministic "today" anchoring of placeholder session open/close.
     /// </summary>
     public sealed class CmeBlackoutService : ISession
     {
+        private readonly IClock _clock;
         private readonly CmeCalendar _calendar;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CmeBlackoutService"/> class and loads the calendar seed.
-        /// </summary>
         public CmeBlackoutService()
+            : this(null)
         {
-            _calendar = CmeCalendarLoader.Load();
         }
 
-        /// <summary>
-        /// Returns <c>true</c> if the provided ET timestamp falls within any configured blackout range for the symbol.
-        /// </summary>
-        /// <param name="etNow">Current time in US/Eastern.</param>
-        /// <param name="symbol">Instrument symbol (e.g., "NQ").</param>
-        /// <returns><c>true</c> if in a blackout range; otherwise <c>false</c>.</returns>
+        /// <summary>Creates a new instance, loading the seed once and wiring the clock.</summary>
+        public CmeBlackoutService(IClock clock)
+        {
+            _clock = clock ?? SystemClock.Instance;
+            _calendar = CmeCalendarLoader.Load(); // never throws; normalized arrays
+        }
+
         public bool IsBlackout(DateTime etNow, string symbol)
         {
             var day = FindDay(etNow, symbol);
@@ -42,12 +44,6 @@ namespace NT8.SDK.Session
             return false;
         }
 
-        /// <summary>
-        /// Returns <c>true</c> if the provided ET timestamp falls within the configured settlement window for the symbol.
-        /// </summary>
-        /// <param name="etNow">Current time in US/Eastern.</param>
-        /// <param name="symbol">Instrument symbol (e.g., "NQ").</param>
-        /// <returns><c>true</c> if in the settlement window; otherwise <c>false</c>.</returns>
         public bool IsSettlementWindow(DateTime etNow, string symbol)
         {
             var day = FindDay(etNow, symbol);
@@ -61,31 +57,18 @@ namespace NT8.SDK.Session
             return CmeCalendarLoader.InRange(tod, s, e);
         }
 
-        /// <summary>
-        /// Returns a conservative placeholder RTH session open time (09:00 ET) for the provided key’s date.
-        /// </summary>
-        /// <param name="key">Session key (symbol + named session).</param>
-        /// <returns>Session open time in ET.</returns>
         public DateTime SessionOpen(SessionKey key)
         {
-            var d = etNowToday();
+            // Conservative placeholder RTH open (09:00 ET) using clock-anchored "today".
+            var d = _clock.UtcNow; // caller passes ET elsewhere; here we only need a stable "day"
             return new DateTime(d.Year, d.Month, d.Day, 9, 0, 0);
         }
 
-        /// <summary>
-        /// Returns a conservative placeholder RTH session close time (16:00 ET) for the provided key’s date.
-        /// </summary>
-        /// <param name="key">Session key (symbol + named session).</param>
-        /// <returns>Session close time in ET.</returns>
         public DateTime SessionClose(SessionKey key)
         {
-            var d = etNowToday();
+            // Conservative placeholder RTH close (16:00 ET) using clock-anchored "today".
+            var d = _clock.UtcNow;
             return new DateTime(d.Year, d.Month, d.Day, 16, 0, 0);
-        }
-
-        private static DateTime etNowToday()
-        {
-            return DateTime.Now.Date;
         }
 
         private CmeDay FindDay(DateTime etNow, string symbol)
@@ -93,7 +76,7 @@ namespace NT8.SDK.Session
             if (_calendar == null || _calendar.Symbols == null || string.IsNullOrEmpty(symbol))
                 return null;
 
-            var date = etNow.ToString("yyyy-MM-dd");
+            var date = etNow.ToString("yyyy-MM-dd"); // ET date string
             for (int i = 0; i < _calendar.Symbols.Length; i++)
             {
                 var s = _calendar.Symbols[i];

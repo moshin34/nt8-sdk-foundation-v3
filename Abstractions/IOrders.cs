@@ -18,15 +18,15 @@ namespace NT8.SDK
         /// Cancels existing orders.
         /// </summary>
         /// <param name="ids">Identifiers of orders to cancel.</param>
-        /// <returns>True if a cancel request was issued.</returns>
-        bool Cancel(OrderIds ids);
+        /// <returns>Nothing.</returns>
+        void Cancel(OrderIds ids);
 
         /// <summary>
         /// Modifies existing orders using a new intent.
         /// </summary>
         /// <param name="ids">Identifiers of orders to modify.</param>
         /// <param name="intent">New order parameters.</param>
-        /// <returns>True if a modification request was issued.</returns>
-        bool Modify(OrderIds ids, OrderIntent intent);
+        /// <returns>Nothing.</returns>
+        void Modify(OrderIds ids, OrderIntent intent);
     }
 }

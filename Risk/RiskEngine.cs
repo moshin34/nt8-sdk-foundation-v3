@@ -1,99 +1,102 @@
 using System;
+using NT8.SDK;          // IRisk, PositionIntent, RiskMode, RiskLockoutState, IClock
+using NT8.SDK.Risk;
 
 namespace NT8.SDK.Risk
 {
     /// <summary>
-    /// Reference <see cref="IRisk"/> implementation with conservative defaults:
+    /// Reference IRisk implementation with conservative defaults and deterministic timing.
     /// - Tracks consecutive losses and applies a time-based lockout.
-    /// - <see cref="EvaluateEntry(NT8.SDK.PositionIntent)"/> returns empty string ("") when accepted.
-    /// - Uses UTC for cooldown timing.
+    /// - EvaluateEntry returns "" when accepted (never null).
+    /// - Uses an injected <see cref="IClock"/> (defaults to SystemClock.Instance).
+    /// - Exposes read-only diagnostics (State, LossStreak, CooldownUntilUtc).
     /// </summary>
     public sealed class RiskEngine : IRisk
     {
         private readonly object _sync = new object();
+        private readonly IClock _clock;
+        private readonly RiskOptions _options;
+
         private int _lossStreak;
         private DateTime _cooldownUntilUtc;
         private RiskLockoutState _state;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="RiskEngine"/> class.
-        /// </summary>
-        /// <param name="mode">Active risk mode (ECP/PCP/DCP/HR).</param>
         public RiskEngine(RiskMode mode)
+            : this(mode, null, null)
+        {
+        }
+
+        public RiskEngine(RiskMode mode, RiskOptions options, IClock clock)
         {
             Mode = mode;
+            _options = options ?? new RiskOptions
+            {
+                LossStreakLockout = RiskConfig.LossStreakLockoutDefault,
+                LockoutDuration = RiskConfig.LockoutDurationDefault
+            };
+            _clock = clock ?? SystemClock.Instance;
+
             _lossStreak = 0;
             _cooldownUntilUtc = DateTime.MinValue;
             _state = RiskLockoutState.None;
         }
 
-        /// <summary>
-        /// Gets the active risk mode.
-        /// </summary>
+        /// <summary>Active risk mode.</summary>
         public RiskMode Mode { get; private set; }
 
+        /// <summary>Last-known state (for diagnostics).</summary>
+        public RiskLockoutState State { get { lock (_sync) { return _state; } } }
+
+        /// <summary>Current consecutive loss count (for diagnostics).</summary>
+        public int LossStreak { get { lock (_sync) { return _lossStreak; } } }
+
+        /// <summary>Cooldown expiry (UTC) when locked out; <see cref="DateTime.MinValue"/> otherwise.</summary>
+        public DateTime CooldownUntilUtc { get { lock (_sync) { return _cooldownUntilUtc; } } }
+
         /// <summary>
-        /// Forces a lockout immediately and starts the cooldown timer.
+        /// Forces an immediate lockout and starts the cooldown timer.
         /// </summary>
-        /// <returns>The new lockout state (LockedOut).</returns>
         public RiskLockoutState Lockout()
         {
             lock (_sync)
             {
                 _state = RiskLockoutState.LockedOut;
-                _cooldownUntilUtc = DateTime.UtcNow + RiskConfig.LockoutDuration;
+                _cooldownUntilUtc = _clock.UtcNow + _options.LockoutDuration;
                 return _state;
             }
         }
 
         /// <summary>
-        /// Returns <c>true</c> if trading is permitted at this moment (i.e., not locked out).
-        /// If the cooldown has expired, clears the lockout and resets the loss streak.
+        /// True if trading is currently permitted. Clears lockout when cooldown expires.
         /// </summary>
         public bool CanTradeNow()
         {
             lock (_sync)
             {
-                if (_state == RiskLockoutState.LockedOut && DateTime.UtcNow >= _cooldownUntilUtc)
+                if (_state == RiskLockoutState.LockedOut && _clock.UtcNow >= _cooldownUntilUtc)
                 {
                     _state = RiskLockoutState.None;
                     _lossStreak = 0;
+                    _cooldownUntilUtc = DateTime.MinValue;
                 }
                 return _state == RiskLockoutState.None;
             }
         }
 
         /// <summary>
-        /// Evaluates an entry intent and returns an empty string ("") to ACCEPT or a reason to REJECT.
-        /// Implementations must not return null.
+        /// Evaluates an entry intent. Returns "" if accepted; otherwise a textual reason.
         /// </summary>
-        /// <param name="intent">The position intent to evaluate.</param>
-        /// <returns>"" if accepted; otherwise a textual rejection reason.</returns>
         public string EvaluateEntry(PositionIntent intent)
         {
-            // Defensive checks
             if (string.IsNullOrEmpty(intent.Symbol)) return "symbol missing";
-
-            // Lock state gate
             if (!CanTradeNow()) return "risk lockout in effect";
-
-            // Mode-specific gates (placeholder hooks; conservative accept for Step 3)
-            switch (Mode)
-            {
-                case RiskMode.ECP:
-                case RiskMode.PCP:
-                case RiskMode.DCP:
-                case RiskMode.HR:
-                default:
-                    return ""; // accept
-            }
+            // Mode hooks can be added later (ECP/PCP etc). For Step 5 we accept by default.
+            return "";
         }
 
         /// <summary>
-        /// Records the outcome of the most recent trade.
-        /// Increments loss streak on loss and applies/updates cooldown when thresholds are met.
+        /// Records the outcome of the most recent trade and updates lockout state.
         /// </summary>
-        /// <param name="win"><c>true</c> if the trade was a win; <c>false</c> if it was a loss.</param>
         public void RecordWinLoss(bool win)
         {
             lock (_sync)
@@ -105,20 +108,28 @@ namespace NT8.SDK.Risk
                     return;
                 }
 
-                // Loss path
                 _lossStreak++;
-                if (_lossStreak >= RiskConfig.LossStreakLockout)
+                if (_lossStreak >= _options.LossStreakLockout)
                 {
                     _state = RiskLockoutState.LockedOut;
-                    _cooldownUntilUtc = DateTime.UtcNow + RiskConfig.LockoutDuration;
+                    _cooldownUntilUtc = _clock.UtcNow + _options.LockoutDuration;
                 }
                 else if (_lossStreak == 1)
                 {
-                    // Soft hint; CanTradeNow still true
-                    _state = RiskLockoutState.CoolingDown;
+                    _state = RiskLockoutState.CoolingDown; // advisory; CanTradeNow still true
                 }
+            }
+        }
+
+        /// <summary>Resets internal counters and clears any lockout (for tests).</summary>
+        public void Reset()
+        {
+            lock (_sync)
+            {
+                _lossStreak = 0;
+                _state = RiskLockoutState.None;
+                _cooldownUntilUtc = DateTime.MinValue;
             }
         }
     }
 }
-

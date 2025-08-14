@@ -1,0 +1,12 @@
+[
+  {
+    "symbol": "NQ",
+    "days": [
+      {
+        "date": "2025-08-13",
+        "settlement": "16:00-16:45",
+        "blackouts": []
+      }
+    ]
+  }
+]
