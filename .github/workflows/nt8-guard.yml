@@ -24,9 +24,9 @@ jobs:
       - name: Install Mono (ensure mcs exists)
         run: |
           sudo apt-get update
-          sudo apt-get install -y mono-devel mono-mcs || sudo apt-get install -y mono-complete
-          mono --version || true
+          sudo apt-get install -y mono-complete
           mcs -version || true
+          mono --version || true
 
       - name: Build Step 1 (Abstractions only)
         run: |
@@ -35,22 +35,30 @@ jobs:
 
       - name: Build Step 2 (Config + Session)
         run: |
-          mkdir -p build
           mcs -langversion:7.2 -target:library \
             Abstractions/*.cs Config/*.cs Session/*.cs \
             -r:/usr/lib/mono/4.5/System.Web.Extensions.dll \
             -out:build/sdk.step2.dll
 
-      - name: Upload Step 1 Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: step1-build
-          path: build/sdk.abstractions.dll
+      - name: Build Step 3 (Risk)
+        run: |
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs Risk/*.cs \
+            -out:build/sdk.step3.dll
+            
+      - name: Build Step 4 (Sizing)
+        run: |
+          mcs -langversion:7.2 -target:library \
+            Abstractions/*.cs Sizing/*.cs \
+            -out:build/sdk.step4.dll
 
-      - name: Upload Step 2 Artifact
+
+      - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: step2-build
-          path: build/sdk.step2.dll
+          name: nt8-sdk-builds
+          path: |
+            build/sdk.abstractions.dll
+            build/sdk.step2.dll
+            build/sdk.step3.dll
