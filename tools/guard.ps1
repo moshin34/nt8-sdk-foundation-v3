@@ -16,6 +16,13 @@ foreach ($p in $pairs) {
   }
 }
 
+# 1b) No C# files at repo root
+$rootCs = Get-ChildItem -Path . -Filter *.cs -File |
+  Where-Object { $_.FullName -notmatch '\\Properties\\AssemblyInfo.cs$' }
+if ($rootCs) {
+  $errors += 'C# files found at repo root; move them into namespaced folders.'
+}
+
 # 2) No NinjaTrader.* in portable layers
 $portable = 'Abstractions','Common','Risk','Sizing','Session','Trailing','Diagnostics','Telemetry'
 foreach ($dir in $portable) {

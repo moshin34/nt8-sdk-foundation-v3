@@ -45,71 +45,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BaseRisk.cs" />
-    <Compile Include="BracketedQuantitySizing.cs" />
-    <Compile Include="Class1.cs" />
-    <Compile Include="CmeBlackoutService.cs" />
-    <Compile Include="CmeCalendar.cs" />
-    <Compile Include="CmeCalendarLoader.cs" />
-    <Compile Include="CmeDay.cs" />
-    <Compile Include="CmeSymbol.cs" />
-    <Compile Include="CompositeRisk.cs" />
-    <Compile Include="CompositeTrailingStop.cs" />
-    <Compile Include="Defaults.cs" />
-    <Compile Include="DiagnosticsSwitch.cs" />
-    <Compile Include="Dto.cs" />
-    <Compile Include="EntryGates.cs" />
-    <Compile Include="EntryPlan.cs" />
-    <Compile Include="EntryPlanner.cs" />
-    <Compile Include="FixedQuantitySizing.cs" />
-    <Compile Include="FixedTicksTrailingStop.cs" />
-    <Compile Include="IBacktestHooks.cs" />
-    <Compile Include="IClock.cs" />
-    <Compile Include="IDiagnostics.cs" />
-    <Compile Include="InMemoryDiagnostics.cs" />
-    <Compile Include="InMemoryTelemetry.cs" />
-    <Compile Include="IOrders.cs" />
-    <Compile Include="IRisk.cs" />
-    <Compile Include="ISdk.cs" />
-    <Compile Include="ISession.cs" />
-    <Compile Include="ISizeRule.cs" />
-    <Compile Include="ISizing.cs" />
-    <Compile Include="ITelemetry.cs" />
-    <Compile Include="ITrailing.cs" />
-    <Compile Include="ITrailingStop.cs" />
-    <Compile Include="LossStreakGuard.cs" />
-    <Compile Include="NoopDiagnostics.cs" />
-    <Compile Include="NoopTelemetry.cs" />
-    <Compile Include="NullDiagnostics.cs" />
-    <Compile Include="NullOrders.cs" />
-    <Compile Include="NullTelemetry.cs" />
-    <Compile Include="OrderRouter.cs" />
-    <Compile Include="PercentTrailingStop.cs" />
-    <Compile Include="PnLTracker.cs" />
-    <Compile Include="PositionSizer.cs" />
-    <Compile Include="PriceMath.cs" />
+    <!-- Include all C# source files recursively -->
+    <Compile Include="**\*.cs"
+             Exclude="obj\**\*;bin\**\*;Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RiskConfig.cs" />
-    <Compile Include="RiskDecision.cs" />
-    <Compile Include="RiskEngine.cs" />
-    <Compile Include="RiskManager.cs" />
-    <Compile Include="RiskOptions.cs" />
-    <Compile Include="RiskTiers.cs" />
-    <Compile Include="RuleBasedSizing.cs" />
-    <Compile Include="Sdk.cs" />
-    <Compile Include="SdkAdapterV1.cs" />
-    <Compile Include="SdkBuilder.cs" />
-    <Compile Include="SdkCapabilities.cs" />
-    <Compile Include="SdkFacade.cs" />
-    <Compile Include="SessionCalendar.cs" />
-    <Compile Include="SettlementGate.cs" />
-    <Compile Include="SizeEngine.cs" />
-    <Compile Include="SystemClock.cs" />
-    <Compile Include="TimeFilter.cs" />
-    <Compile Include="TradeLogger.cs" />
-    <Compile Include="TrailingAdapter.cs" />
-    <Compile Include="TrailingEngine.cs" />
-    <Compile Include="TrailProfiles.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
