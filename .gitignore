@@ -13,3 +13,5 @@ TestResults/
 # Caches / logs
 *.cache
 *.log
+
+*.zip
