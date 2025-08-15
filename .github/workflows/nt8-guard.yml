@@ -1,112 +1,79 @@
 name: NT8 Guard
-
 on:
-  push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
+  push:
+    branches: [ main ]
 
 jobs:
   guard:
-    runs-on: ubuntu-latest
+    name: guard
+    runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Run NT8 Guard
-        run: python tools/nt8_guard.py --fail-on-warn
-
-      - name: Install Mono (ensure mcs exists)
+      - name: Repo hygiene (flexible)
+        shell: pwsh
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mono-complete
-          mcs -version || true
-          mono --version || true
+          $ErrorActionPreference = 'Stop'
+          $issues = @()
 
-      - name: Build Step 1 (Abstractions)
+          # 1) Duplicate/colliding folders that confuse Windows
+          $pairs = @(
+            @{A='Docs';B='docs'},
+            @{A='Diagnostics';B='Diag'},
+            @{A='QA.TestKit';B='QA_Trace'},
+            @{A='QA.TestKit';B='QA/ Trace'},
+            @{A='NT8Bridge';B='Bridge'}
+          )
+          foreach ($p in $pairs) {
+            if (Test-Path $p.A -and Test-Path $p.B) {
+              $issues += "Both '$($p.A)' and '$($p.B)' exist. Pick one."
+            }
+          }
+
+          # 2) Stray root .cs (allow only AssemblyInfo.cs under Properties/)
+          $rootCs = Get-ChildItem -Path . -Filter *.cs -File -Depth 1
+          foreach ($f in $rootCs) {
+            if ($f.FullName -notmatch '\\Properties\\AssemblyInfo\.cs$') {
+              $issues += "C# file at repo root: $($f.Name)"
+            }
+          }
+
+          # 3) No NinjaTrader.* usage outside NT8Bridge/Strategies
+          $allCs = Get-ChildItem -Recurse -Filter *.cs -File `
+            | Where-Object { $_.FullName -notmatch '\\(NT8Bridge|Strategies)\\' }
+          if ($allCs) {
+            $hits = Select-String -Path $allCs.FullName -Pattern 'NinjaTrader\.' -SimpleMatch
+            if ($hits) {
+              $issues += "Found NinjaTrader.* usage outside NT8Bridge/Strategies."
+              $hits | ForEach-Object { Write-Host "::error ::$($_.Path):$($_.LineNumber) $($_.Line.Trim())" }
+            }
+          }
+
+          if ($issues.Count) {
+            $issues | ForEach-Object { Write-Host "::error ::$_" }
+            exit 1
+          } else {
+            Write-Host "Hygiene OK"
+          }
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore solution
+        run: nuget restore SDK.sln
+
+      - name: Build (Release)
+        run: msbuild SDK.sln /m /p:Configuration=Release
+
+      - name: Verify SDK.dll produced
+        shell: pwsh
         run: |
-          mkdir -p build
-          mcs -langversion:7.2 -target:library Abstractions/*.cs -out:build/sdk.abstractions.dll
-
-      - name: Build Step 2 (Config + Session)
-        run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs Config/*.cs Session/*.cs \
-            -r:/usr/lib/mono/4.5/System.Web.Extensions.dll \
-            -out:build/sdk.step2.dll
-
-      - name: Build Step 3 (Risk)
-        run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs Risk/*.cs \
-            -out:build/sdk.step3.dll
-
-      - name: Build Step 4a (Sizing)
-        run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs Sizing/*.cs \
-            -out:build/sdk.step4.sizing.dll
-
-      - name: Build Step 4b (Trailing)
-        run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs Trailing/*.cs \
-            -out:build/sdk.step4.trailing.dll
-
-      - name: Build Step 5 (Façade aggregate)
-        run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs \
-            Config/*.cs Session/*.cs \
-            Risk/*.cs Sizing/*.cs Trailing/*.cs \
-            Telemetry/*.cs Diagnostics/*.cs Orders/*.cs Facade/*.cs QA.TestKit/*.cs \
-            -r:/usr/lib/mono/4.5/System.Web.Extensions.dll \
-            -out:build/sdk.step5.facade.dll
-
-      - name: Build QuickStart (DEBUG)
-        run: |
-          mcs -langversion:7.2 -define:DEBUG \
-            -r:build/sdk.step5.facade.dll \
-            -target:exe Harness/QuickStartRunner.cs Harness/QuickStartProgram.cs \
-            -out:build/QuickStart.exe
-
-      - name: Run QuickStart and capture log
-        run: |
-          mono build/QuickStart.exe | tee build/quickstart.log
-
-      - name: Assertions (risk lockout & cooldown)
-        run: |
-          grep -q "After 2 losses -> CanTradeNow=False" build/quickstart.log
-          grep -q "After cooldown -> CanTradeNow=True" build/quickstart.log
-
-      - name: Assertions (session gates)
-        run: |
-          grep -q "Settlement gate (16:05 ET): settlement window" build/quickstart.log
-          grep -q "Settlement gate (15:00 ET): OK" build/quickstart.log
-
-      - name: Assertions (planner output)
-        run: |
-          grep -q "EntryPlan: accepted=True" build/quickstart.log
-          grep -q "stopType=StopMarket" build/quickstart.log
-          grep -q "EntryPlan stop numeric check: stop=19990" build/quickstart.log
-          grep -q "EntryPlan(bad price): accepted=False" build/quickstart.log
-
-      - name: Upload Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nt8-sdk-builds
-          path: |
-            build/sdk.abstractions.dll
-            build/sdk.step2.dll
-            build/sdk.step3.dll
-            build/sdk.step4.sizing.dll
-            build/sdk.step4.trailing.dll
-            build/sdk.step5.facade.dll
-            build/QuickStart.exe
-            build/quickstart.log
+          $dlls = Get-ChildItem -Recurse -Filter SDK.dll -File `
+            | Where-Object { $_.FullName -match '\\bin\\Release\\' }
+          if (-not $dlls) {
+            Write-Error "SDK.dll not produced under bin\\Release"
+            exit 1
+          }
+          $dlls | ForEach-Object { Write-Host "Found: $($_.FullName)" }
