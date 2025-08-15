@@ -27,6 +27,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                     .WithOrders(orders)
                     .Build();
 
+                var version = typeof(NT8.SDK.Facade.SdkBuilder).Assembly.GetName().Version;
+                Print($"NT8 SDK v{version} loaded.");
                 Print("SDK wired with Nt8Orders (no-trade bridge)");
             }
         }
