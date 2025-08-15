@@ -1,0 +1,21 @@
+﻿name: Feature
+description: New capability or enhancement
+labels: ["feature"]
+assignees: ["CodexDev"]
+body:
+  - type: input
+    id: goal
+    attributes: { label: Goal (1 sentence) }
+    validations: { required: true }
+  - type: textarea
+    id: spec
+    attributes: { label: What to build, placeholder: Acceptance criteria, interfaces, examples… }
+    validations: { required: true }
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Quality gates
+      options:
+        - label: Guard passes
+        - label: Build passes
+        - label: NT8 compiles (if touched NT8Bridge/Strategies)

@@ -1,0 +1,27 @@
+﻿name: Auto-merge (squash)
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened, ready_for_review]
+  check_suite:
+    types: [completed]
+  status: {}
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Enable auto-merge when labeled
+        if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash
+      - name: Auto-merge when checks pass
+        if: contains(github.event.pull_request.labels.*.name, 'auto-merge')
+        uses: peter-evans/auto-merge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          merge-method: squash
+          required-labels: auto-merge

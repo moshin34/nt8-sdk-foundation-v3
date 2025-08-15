@@ -1,0 +1,20 @@
+﻿nt8bridge:
+  - "NT8Bridge/**"
+strategies:
+  - "Strategies/**"
+portable:
+  - "Abstractions/**"
+  - "Common/**"
+  - "Risk/**"
+  - "Sizing/**"
+  - "Session/**"
+  - "Trailing/**"
+  - "Diagnostics/**"
+  - "Telemetry/**"
+docs:
+  - "Docs/**"
+  - "**/*.md"
+ci:
+  - ".github/**"
+tools:
+  - "tools/**"
