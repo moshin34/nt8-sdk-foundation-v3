@@ -1,20 +1,31 @@
-﻿nt8bridge:
-  - "NT8Bridge/**"
+nt8bridge:
+  - changed-files:
+      - any-glob-to-any-file: 'NT8Bridge/**'
+
 strategies:
-  - "Strategies/**"
+  - changed-files:
+      - any-glob-to-any-file: 'Strategies/**'
+
 portable:
-  - "Abstractions/**"
-  - "Common/**"
-  - "Risk/**"
-  - "Sizing/**"
-  - "Session/**"
-  - "Trailing/**"
-  - "Diagnostics/**"
-  - "Telemetry/**"
+  - changed-files:
+      - any-glob-to-any-file: 'Abstractions/**'
+      - any-glob-to-any-file: 'Common/**'
+      - any-glob-to-any-file: 'Risk/**'
+      - any-glob-to-any-file: 'Sizing/**'
+      - any-glob-to-any-file: 'Session/**'
+      - any-glob-to-any-file: 'Trailing/**'
+      - any-glob-to-any-file: 'Diagnostics/**'
+      - any-glob-to-any-file: 'Telemetry/**'
+
 docs:
-  - "Docs/**"
-  - "**/*.md"
+  - changed-files:
+      - any-glob-to-any-file: 'Docs/**'
+      - any-glob-to-any-file: '**/*.md'
+
 ci:
-  - ".github/**"
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
 tools:
-  - "tools/**"
+  - changed-files:
+      - any-glob-to-any-file: 'tools/**'
