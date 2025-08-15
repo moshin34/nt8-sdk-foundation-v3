@@ -1,0 +1,18 @@
+﻿name: Bug
+description: Something broke or regressed
+labels: ["bug"]
+assignees: ["CodexDev"]
+body:
+  - type: textarea
+    id: repro
+    attributes: { label: Repro steps }
+    validations: { required: true }
+  - type: input
+    id: expected
+    attributes: { label: Expected }
+  - type: input
+    id: actual
+    attributes: { label: Actual }
+  - type: textarea
+    id: logs
+    attributes: { label: Logs / screenshots }
