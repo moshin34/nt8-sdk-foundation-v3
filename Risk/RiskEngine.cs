@@ -1,5 +1,6 @@
 using System;
 using NT8.SDK;          // IRisk, PositionIntent, RiskMode, RiskLockoutState, IClock
+using NT8.SDK.Common;    // SystemClock
 using NT8.SDK.Risk;
 
 namespace NT8.SDK.Risk

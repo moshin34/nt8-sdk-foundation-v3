@@ -9,6 +9,8 @@ bin/
 obj/
 TestResults/
 *.opendb
+*.dll
+*.pdb
 
 # Caches / logs
 *.cache

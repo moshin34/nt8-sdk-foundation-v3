@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
-using NT8.SDK;                 // SessionKey, IClock, SystemClock
+using NT8.SDK;                 // SessionKey, IClock
+using NT8.SDK.Common;          // SystemClock
 using NT8.SDK.Config;          // CmeCalendar, CmeCalendarLoader
 
 namespace NT8.SDK.Session
