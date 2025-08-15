@@ -31,6 +31,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <DocumentationFile>bin\Release\SDK.xml</DocumentationFile>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -112,9 +113,14 @@
     <Compile Include="TrailProfiles.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
   <PropertyGroup>
-    <PostBuildEvent>xcopy "$(TargetPath)" "%25USERPROFILE%25\Documents\NinjaTrader 8\bin\Custom\" /Y
-xcopy "$(TargetDir)$(TargetName).xml" "%25USERPROFILE%25\Documents\NinjaTrader 8\bin\Custom\" /Y
-</PostBuildEvent>
+    <NinjaTraderCustomDir>$(USERPROFILE)\Documents\NinjaTrader 8\bin\Custom\</NinjaTraderCustomDir>
   </PropertyGroup>
+
+  <Target Name="CopyToNinjaTrader" AfterTargets="Build" Condition="Exists('$(NinjaTraderCustomDir)')">
+    <Message Importance="high" Text="Copying SDK outputs to '$(NinjaTraderCustomDir)'" />
+    <Copy SourceFiles="$(TargetDir)SDK.dll" DestinationFolder="$(NinjaTraderCustomDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(TargetDir)SDK.xml" DestinationFolder="$(NinjaTraderCustomDir)" SkipUnchangedFiles="true" Condition="Exists('$(TargetDir)SDK.xml')" />
+  </Target>
 </Project>
