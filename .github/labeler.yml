@@ -1,4 +1,11 @@
-﻿nt8bridge:
+uses: actions/labeler@v5
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+ 
+ 
+nt8bridge:
   - "NT8Bridge/**"
 strategies:
   - "Strategies/**"
