@@ -4,10 +4,11 @@ $errors = @()
 
 # 1) Duplicate/colliding folders
 $pairs = @(
-  @{A='Docs';B='docs'},
-  @{A='Diagnostics';B='Diag'},
-  @{A='QA.TestKit';B='QA_Trace'},
-  @{A='NT8Bridge';B='Bridge'}
+  @{A='Docs';        B='docs'},
+  @{A='Diagnostics'; B='Diag'},
+  @{A='NT8Bridge';   B='Bridge'},
+  @{A='QA.TestKit';  B='QA/ Trace'},  # space variant
+  @{A='QA.TestKit';  B='QA_Trace'}    # underscore variant
 )
 foreach ($p in $pairs) {
   if ((Test-Path $p.A) -and (Test-Path $p.B)) {
