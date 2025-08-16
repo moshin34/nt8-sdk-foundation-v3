@@ -21,14 +21,14 @@ jobs:
       - name: Stage A — Abstractions (best-effort)
         shell: bash
         run: |
-          set -u  # keep unset-var strict, but DO NOT 'set -e'
+set -euo pipefail
           if [ -d Abstractions ]; then
             mapfile -t files < <(find Abstractions -name "*.cs")
             if [ ${#files[@]} -gt 0 ]; then
               if mcs -langversion:7.2 -target:library -out:stageA.dll "${files[@]}"; then
                 echo "Stage A compile OK"
               else
-                echo "::warning ::Stage A compile failed (temporary WARN-only)."
+                echo "::warning ::Stage A compile failed; exiting."
               fi
             fi
           fi
@@ -48,7 +48,7 @@ jobs:
               if mcs -langversion:7.2 -r:System.Web.Extensions.dll -target:library -out:stageB.dll "${files[@]}"; then
                 echo "Stage B compile OK"
               else
-                echo "::warning ::Stage B compile failed (temporary WARN-only)."
+                echo "::warning ::Stage B compile failed; exiting."
               fi
             fi
           fi
