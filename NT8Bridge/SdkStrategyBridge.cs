@@ -1,36 +1,38 @@
 ﻿using System;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using NinjaTrader.Cbi;
 using NinjaTrader.NinjaScript;
 using NinjaTrader.NinjaScript.Strategies;
 using NT8.SDK;
-using NT8.SDK.Abstractions;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
     /// <summary>
     /// SdkStrategyBridge
-    /// - On load: instantiate SDK and print startup banner & config.
-    /// - On each tick: forward time/price to SDK (no orders).
-    /// - Every 5 seconds: print latest tick; also print bias transitions.
+    /// - Uses portable NT8.SDK (SMA cross) to decide bias.
+    /// - Default is DryRun=true (logs only). Set DryRun=false to place sim orders.
     /// </summary>
     public class SdkStrategyBridge : Strategy
     {
-        private ISdk _sdk;
+        private SdkFacade _sdk;
         private DateTime _lastPrint = DateTime.MinValue;
-        private readonly TimeSpan _printEvery = TimeSpan.FromSeconds(5);
-
-        private string _lastBias = null; // "LONG", "SHORT", "FLAT", or null until known
-
-        // === Exposed NinjaTrader properties (editable in Strategy UI) ===
-        [NinjaScriptProperty]
-        [Range(1, int.MaxValue)]
-        [Display(Name = "Fast SMA Period", Order = 1, GroupName = "SDK")]
-        public int FastSmaPeriod { get; set; }
+        private TimeSpan _printEvery = TimeSpan.FromSeconds(5);
+        private string _lastBias;
 
         [NinjaScriptProperty]
-        [Range(2, int.MaxValue)]
-        [Display(Name = "Slow SMA Period", Order = 2, GroupName = "SDK")]
-        public int SlowSmaPeriod { get; set; }
+        [Range(2, 200)]
+        [Display(Name = "Fast SMA", GroupName = "SDK", Order = 0)]
+        public int FastSma { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(3, 400)]
+        [Display(Name = "Slow SMA", GroupName = "SDK", Order = 1)]
+        public int SlowSma { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "DryRun (no orders)", GroupName = "SDK", Order = 2)]
+        public bool DryRun { get; set; }
 
         protected override void OnStateChange()
         {
@@ -39,63 +41,81 @@ namespace NinjaTrader.NinjaScript.Strategies
                 Name = "SdkStrategyBridge";
                 Calculate = Calculate.OnEachTick;
                 IsUnmanaged = false;
-                IsInstantiatedOnEachOptimizationIteration = false;
-
-                // Defaults (safe; can be changed in UI)
-                FastSmaPeriod = 5;
-                SlowSmaPeriod = 20;
+                FastSma = 5;
+                SlowSma = 20;
+                DryRun  = true;    // default safe: logs only
+                EntriesPerDirection = 1;
+                EntryHandling = EntryHandling.AllEntries;
             }
             else if (State == State.DataLoaded)
             {
-                // Instantiate the SDK façade with configured SMA params
-                _sdk = new SdkFacade(FastSmaPeriod, SlowSmaPeriod);
+                if (FastSma >= SlowSma)
+                    throw new ArgumentException("FastSma must be < SlowSma.");
 
+                _sdk = new SdkFacade(FastSma, SlowSma);
                 Print(_sdk.StartupBanner);
-                Print("[SDK] config: SMA fast=" + FastSmaPeriod + " slow=" + SlowSmaPeriod);
+                _lastBias = null;
             }
         }
 
         protected override void OnBarUpdate()
         {
-            if (_sdk == null || CurrentBar < 0)
+            if (CurrentBar < 0 || _sdk == null)
                 return;
 
             DateTime t = Time[0];
             double price = Close[0];
+
+            // feed tick into portable SDK
             _sdk.OnPriceTick(t, price);
 
-            // Periodic latest-tick print
+            // periodic heartbeat with latest tick
             if (_lastPrint == DateTime.MinValue || (t - _lastPrint) >= _printEvery)
             {
-                DateTime lt;
-                double lp;
+                DateTime lt; double lp;
                 if (_sdk.TryGetLatestTick(out lt, out lp))
-                {
-                    Print("[SDK] latest tick: " + lt.ToString("o") + "  price=" + lp);
-                }
-                else
-                {
-                    Print("[SDK] no ticks yet");
-                }
+                    Print($"[SDK] latest tick: {lt:o}  price={lp}");
                 _lastPrint = t;
             }
 
-            // Bias transitions
-            bool isLong;
-            bool isShort;
+            // query bias and act/log
+            bool isLong, isShort;
             if (_sdk.TryGetSignal(out isLong, out isShort))
             {
                 string bias = isLong ? "LONG" : (isShort ? "SHORT" : "FLAT");
-                if (!string.Equals(bias, _lastBias, StringComparison.Ordinal))
+                if (bias != _lastBias)
                 {
-                    Print("[SDK] bias => " + bias);
+                    Print($"[SDK] bias -> {bias} @ {t:o}");
                     _lastBias = bias;
                 }
+
+                if (!DryRun)
+                {
+                    // simple flip logic: go with current bias (managed orders)
+                    if (isLong && Position.MarketPosition != MarketPosition.Long)
+                    {
+                        if (Position.MarketPosition == MarketPosition.Short) ExitShort();
+                        EnterLong();
+                    }
+                    else if (isShort && Position.MarketPosition != MarketPosition.Short)
+                    {
+                        if (Position.MarketPosition == MarketPosition.Long) ExitLong();
+                        EnterShort();
+                    }
+                }
+                else
+                {
+                    // log-only mode
+                    if (isLong && Position.MarketPosition != MarketPosition.Long)
+                        Print("[SDK] DryRun would EnterLong()");
+                    else if (isShort && Position.MarketPosition != MarketPosition.Short)
+                        Print("[SDK] DryRun would EnterShort()");
+                }
             }
-            else if (_lastBias != "WARMING")
+            else
             {
-                Print("[SDK] bias => WARMING");
-                _lastBias = "WARMING";
+                // warming up until slow SMA is filled
+                // (quiet by default to avoid spam)
             }
         }
     }
