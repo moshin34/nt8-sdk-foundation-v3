@@ -3,6 +3,7 @@ using NT8.SDK.Risk;
 using NT8.SDK.Sizing;
 using NT8.SDK.Session;
 using NT8.SDK.Trailing;
+using NT8.SDK.Common;
 
 namespace NT8.SDK.Facade
 {

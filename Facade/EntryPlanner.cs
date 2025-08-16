@@ -1,4 +1,5 @@
 using System;
+using NT8.SDK.Common;
 using NT8.SDK.Session;
 
 namespace NT8.SDK.Facade

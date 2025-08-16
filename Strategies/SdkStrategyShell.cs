@@ -73,7 +73,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     .WithMode(RiskMode)
                     .WithLossStreakLockout(LossStreakLockout)
                     .WithLockoutDuration(TimeSpan.FromMinutes(LockoutDurationMinutes))
-                    .WithClock(NT8.SDK.SystemClock.Instance)
+                    .WithClock(NT8.SDK.Common.SystemClock.Instance)
                     .WithOrders(new NT8.SDK.NT8Bridge.Nt8Orders(this)); // Managed-orders adapter
 
                 _sdk = builder.Build();
@@ -81,8 +81,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             else if (State == State.DataLoaded)
             {
                 _submitted = false;
-                var version = typeof(SdkBuilder).Assembly.GetName().Version;
-                Print($"NT8 SDK v{version} loaded.");
+                Print($"SDK loaded v{NT8.SDK.SdkVersion.Informational} ({NT8.SDK.SdkVersion.AssemblyVersion})");
             }
         }
 
