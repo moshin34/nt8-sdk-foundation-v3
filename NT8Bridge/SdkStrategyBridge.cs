@@ -1,4 +1,5 @@
 ﻿using System;
+using System.ComponentModel;
 using NinjaTrader.NinjaScript;
 using NinjaTrader.NinjaScript.Strategies;
 using NT8.SDK;
@@ -8,7 +9,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
     /// <summary>
     /// SdkStrategyBridge
-    /// - On load: instantiate SDK and print startup banner.
+    /// - On load: instantiate SDK and print startup banner & config.
     /// - On each tick: forward time/price to SDK (no orders).
     /// - Every 5 seconds: print latest tick; also print bias transitions.
     /// </summary>
@@ -20,6 +21,17 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         private string _lastBias = null; // "LONG", "SHORT", "FLAT", or null until known
 
+        // === Exposed NinjaTrader properties (editable in Strategy UI) ===
+        [NinjaScriptProperty]
+        [Range(1, int.MaxValue)]
+        [Display(Name = "Fast SMA Period", Order = 1, GroupName = "SDK")]
+        public int FastSmaPeriod { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(2, int.MaxValue)]
+        [Display(Name = "Slow SMA Period", Order = 2, GroupName = "SDK")]
+        public int SlowSmaPeriod { get; set; }
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -28,11 +40,18 @@ namespace NinjaTrader.NinjaScript.Strategies
                 Calculate = Calculate.OnEachTick;
                 IsUnmanaged = false;
                 IsInstantiatedOnEachOptimizationIteration = false;
+
+                // Defaults (safe; can be changed in UI)
+                FastSmaPeriod = 5;
+                SlowSmaPeriod = 20;
             }
             else if (State == State.DataLoaded)
             {
-                _sdk = new SdkFacade();
+                // Instantiate the SDK façade with configured SMA params
+                _sdk = new SdkFacade(FastSmaPeriod, SlowSmaPeriod);
+
                 Print(_sdk.StartupBanner);
+                Print("[SDK] config: SMA fast=" + FastSmaPeriod + " slow=" + SlowSmaPeriod);
             }
         }
 
