@@ -16,16 +16,25 @@ namespace NT8.SDK.Abstractions
         /// <summary>
         /// Minimal price tick hook for end-to-end wiring (no orders).
         /// </summary>
-        /// <param name=""time"">UTC timestamp of the tick.</param>
-        /// <param name=""price"">Last traded price.</param>
+        /// <param name="time">UTC timestamp of the tick.</param>
+        /// <param name="price">Last traded price.</param>
         void OnPriceTick(DateTime time, double price);
 
         /// <summary>
         /// Returns the latest tick if one has been observed since startup.
         /// </summary>
-        /// <param name=""time"">UTC timestamp of the latest tick.</param>
-        /// <param name=""price"">Price of the latest tick.</param>
+        /// <param name="time">UTC timestamp of the latest tick.</param>
+        /// <param name="price">Price of the latest tick.</param>
         /// <returns>True if a tick has been observed; otherwise false.</returns>
         bool TryGetLatestTick(out DateTime time, out double price);
+
+        /// <summary>
+        /// Returns the current signal bias if available.
+        /// Return value indicates whether the signal has warmed up enough to decide.
+        /// </summary>
+        /// <param name="isLong">True when long bias.</param>
+        /// <param name="isShort">True when short bias.</param>
+        /// <returns>True if a bias decision is available; otherwise false.</returns>
+        bool TryGetSignal(out bool isLong, out bool isShort);
     }
 }

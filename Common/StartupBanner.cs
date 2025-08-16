@@ -1,8 +1,17 @@
-﻿namespace NT8.SDK.Common
+﻿using System;
+
+namespace NT8.SDK.Common
 {
-    /// <summary>Builds a startup banner without side effects (Guard-safe).</summary>
-    internal static class StartupBanner
+    /// <summary>
+    /// Builds a startup banner string using SdkVersion.
+    /// </summary>
+    public static class StartupBanner
     {
-        public static string Get() => $""NT8.SDK v{SdkInfo.Version} ({SdkInfo.BuildStamp}) ready"";
+        /// <summary>Returns a human-readable SDK banner.</summary>
+        public static string Get()
+        {
+            // Keep it simple for maximum compatibility.
+            return "NT8.SDK v" + SdkVersion.Version;
+        }
     }
 }
