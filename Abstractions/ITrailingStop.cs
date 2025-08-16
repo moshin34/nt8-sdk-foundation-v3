@@ -1,40 +1,35 @@
 ﻿using System;
-using NT8.SDK;
 
-namespace NT8.SDK.Trailing
+namespace NT8.SDK.Abstractions
 {
+    /// <summary>Portable position side for SDK abstractions.</summary>
+    public enum PositionSide
+    {
+        Flat = 0,
+        Long = 1,
+        Short = 2
+    }
+
     /// <summary>
-    /// Defines a trailing stop strategy that suggests stop prices based on
-    /// entry and current prices.
+    /// Minimal trailing stop abstraction for portable layers (no NinjaTrader types).
+    /// Implementations should update StopPrice monotonically in the direction of profit.
     /// </summary>
     public interface ITrailingStop
     {
-        /// <summary>
-        /// Gets a suggested stop price.
-        /// </summary>
-        /// <param name="entryPrice">The original entry price.</param>
-        /// <param name="currentPrice">The current market price.</param>
-        /// <param name="side">The side of the position.</param>
-        /// <returns>The suggested stop price, or <c>null</c> if inactive or cannot compute.</returns>
-        double? GetStopPrice(double entryPrice, double currentPrice, PositionSide side);
-    }
+        /// <summary>The side (Long/Short/Flat) this stop protects.</summary>
+        PositionSide Side { get; }
 
-#if DEBUG
-    internal sealed class DebugTrailingStop : ITrailingStop
-    {
-        public double? GetStopPrice(double entryPrice, double currentPrice, PositionSide side)
-        {
-            return currentPrice;
-        }
-    }
+        /// <summary>The current stop price.</summary>
+        double StopPrice { get; }
 
-    internal static class DebugITrailingStop
-    {
-        internal static void Main()
-        {
-            ITrailingStop stop = new DebugTrailingStop();
-            Console.WriteLine("Debug stop: " + stop.GetStopPrice(1.0, 2.0, PositionSide.Long));
-        }
+        /// <summary>Reset the trailing stop for a new position.</summary>
+        /// <param name="side">Position side.</param>
+        /// <param name="entryPrice">Entry price for the position.</param>
+        void Reset(PositionSide side, double entryPrice);
+
+        /// <summary>Update the trailing stop with a new tick.</summary>
+        /// <param name="time">UTC time of the tick.</param>
+        /// <param name="lastPrice">Last traded price.</param>
+        void OnPriceTick(DateTime time, double lastPrice);
     }
-#endif
 }
