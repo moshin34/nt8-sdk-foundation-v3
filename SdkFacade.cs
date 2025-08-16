@@ -26,7 +26,7 @@ namespace NT8.SDK
 
         public string SdkVersion { get { return SdkVersionInfo.Version; } }
 
-        public string StartupBanner { get { return StartupBanner.Get(); } }
+        public string StartupBanner { get { return NT8.SDK.Common.StartupBanner.Get();} }
 
         public void OnPriceTick(DateTime time, double price)
         {
