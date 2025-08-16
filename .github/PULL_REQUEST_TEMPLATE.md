@@ -1,14 +1,28 @@
-## What changed?
--
+## Summary
+Describe what this PR adds/changes.
 
-## Why?
--
+## Compile Target (must pass)
+- [ ] NinjaTrader 8, .NET Framework 4.8, C# 7.3 only
+- [ ] One public class per file
+- [ ] No modern C# constructs (`record`, `init`, advanced `switch` patterns, `async`)
 
-## How tested?
-- [ ] Guard passed (`powershell .\tools\guard.ps1`)
-- [ ] NT8 compile ok (if NT8Bridge/Strategies touched)
+## NinjaTrader Signatures (if Strategy code)
+- [ ] Uses exact overrides:
+  - protected override void OnOrderUpdate(Order order)
+  - protected override void OnExecutionUpdate(Execution execution, Order order)
 
-## Risk / Rollback
--
+## Layering & Hygiene
+- [ ] Pure C# layers compile without NT8 refs
+- [ ] Bridge has no indicators
+- [ ] Template strategy compiles and runs on SIM
 
-## Screenshots / Logs
+## Diagnostics/Logs
+- [ ] Diagnostics path auto-created; no exceptions
+- [ ] JSONL compact; no PII
+
+## Testing
+- [ ] Entry+OCO+trailing happy path
+- [ ] Rejection → protective flatten
+
+## Docs
+- [ ] README updated if needed

@@ -1,6 +1,0 @@
-Daily loop:
-  git checkout -b feat/<short>
-  .\tools\guard.ps1
-  .\tools\build.ps1
-  .\tools\test.ps1
-  Open small Draft PR with logs; when green → merge

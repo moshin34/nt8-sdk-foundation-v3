@@ -81,8 +81,6 @@ namespace NinjaTrader.NinjaScript.Strategies
             else if (State == State.DataLoaded)
             {
                 _submitted = false;
-                var version = typeof(SdkBuilder).Assembly.GetName().Version;
-                Print($"NT8 SDK v{version} loaded.");
             }
         }
 

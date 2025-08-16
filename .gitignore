@@ -1,17 +1,18 @@
-# Visual Studio
-.vs/
-*.user
-*.suo
-*.userprefs
-
-# Build outputs
+# NinjaTrader & Visual Studio build artifacts
 bin/
 obj/
-TestResults/
-*.opendb
+*.dll
+*.pdb
 
-# Caches / logs
-*.cache
-*.log
+# User-specific configs
+*.nt8
+*.xml
+*.json.user
 
-*.zip
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs & QA artifacts
+/QA/Trace/*.log
+/QA/Trace/*.tmp
