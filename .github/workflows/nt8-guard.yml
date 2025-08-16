@@ -9,15 +9,10 @@ on:
 jobs:
   guard:
     runs-on: ubuntu-latest
+    container: mono:6.12
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Mono (mcs)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mono-complete
-
-      # -------- Stage A: Abstractions — best-effort (warn on failure) --------
       - name: Stage A — Abstractions (best-effort)
         shell: bash
         run: |
