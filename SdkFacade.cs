@@ -1,18 +1,31 @@
 ﻿using System;
 using NT8.SDK.Abstractions;
 using NT8.SDK.Common;
-using StartupBannerCommon = NT8.SDK.Common.StartupBanner;
 
 namespace NT8.SDK
 {
     /// <summary>
-    /// Production-facing SDK façade implementing ISdk. Exposes identity info
-    /// and accepts price ticks for downstream processing (no order placement).
+    /// Production-facing SDK façade implementing ISdk. Exposes identity info,
+    /// accepts price ticks, and maintains a simple SMA crossover signal.
     /// </summary>
     public sealed class SdkFacade : ISdk
     {
         private Tick _lastTick;
         private bool _hasTick;
+
+        // Simple price signal (portable)
+        private readonly SmaCrossSignal _signal;
+
+        /// <summary>Create a façade with default SMA params (fast=5, slow=20).</summary>
+        public SdkFacade() : this(5, 20)
+        {
+        }
+
+        /// <summary>Create a façade with explicit SMA params.</summary>
+        public SdkFacade(int fastSmaPeriod, int slowSmaPeriod)
+        {
+            _signal = new SmaCrossSignal(fastSmaPeriod, slowSmaPeriod);
+        }
 
         /// <summary>Semantic SDK version (e.g., 0.1.0).</summary>
         public string SdkVersion
@@ -23,21 +36,22 @@ namespace NT8.SDK
         /// <summary>Startup banner string suitable for logging or UI display.</summary>
         public string StartupBanner
         {
-            get { return StartupBannerCommon.Get(); }
+            get { return StartupBanner.Get(); }
         }
 
-        /// <summary>
-        /// Accepts a price tick. Stores only the last tick for quick diagnostics.
-        /// </summary>
+        /// <summary>Accepts a price tick. Stores the last tick and feeds the signal.</summary>
         public void OnPriceTick(DateTime time, double price)
         {
             _lastTick = new Tick(time, price);
             _hasTick = true;
+
+            if (_signal != null)
+            {
+                _signal.OnPriceTick(time, price);
+            }
         }
 
-        /// <summary>
-        /// Returns the latest observed tick if available.
-        /// </summary>
+        /// <summary>Returns the latest observed tick if available.</summary>
         public bool TryGetLatestTick(out DateTime time, out double price)
         {
             if (!_hasTick)
@@ -49,6 +63,20 @@ namespace NT8.SDK
 
             time = _lastTick.Time;
             price = _lastTick.Price;
+            return true;
+        }
+
+        /// <summary>Returns the current signal bias if available.</summary>
+        public bool TryGetSignal(out bool isLong, out bool isShort)
+        {
+            isLong = false;
+            isShort = false;
+
+            if (_signal == null || !_signal.HasValue)
+                return false;
+
+            isLong = _signal.IsLong;
+            isShort = _signal.IsShort;
             return true;
         }
 
