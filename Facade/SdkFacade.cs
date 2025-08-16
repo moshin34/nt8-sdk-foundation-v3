@@ -1,51 +1,68 @@
 using System;
-using NT8.SDK;
+using NT8.SDK.Abstractions;
+using NT8.SDK.Common;
+using StartupBannerCommon = NT8.SDK.Common.StartupBanner;
 
-/// <summary>
-/// Concrete implementation of ISdk that aggregates core subsystems.
-/// </summary>
-namespace NT8.SDK.Facade
+namespace NT8.SDK
 {
     /// <summary>
-    /// Concrete implementation of <see cref="ISdk"/> that aggregates core subsystems.
+    /// Production-facing SDK façade implementing ISdk. This façade exposes identity info
+    /// and accepts price ticks for downstream processing (no order placement here).
     /// </summary>
     public sealed class SdkFacade : ISdk
     {
-        /// <summary>Constructs an immutable facade over the provided subsystems (nulls allowed).</summary>
-        public SdkFacade(IRisk risk, ISizing sizing, IOrders orders, ISession session, ITrailing trailing, ITelemetry telemetry, IDiagnostics diagnostics, IBacktestHooks backtest)
+        // Minimal, lock-free latest-tick sink (no collections to keep it cheap).
+        private Tick _lastTick;
+        private bool _hasTick;
+
+        /// <summary>Semantic SDK version (e.g., 0.1.0).</summary>
+        public string SdkVersion
         {
-            Risk = risk;
-            Sizing = sizing;
-            Orders = orders;
-            Session = session;
-            Trailing = trailing;
-            Telemetry = telemetry;
-            Diagnostics = diagnostics;
-            Backtest = backtest;
+            get { return SdkInfo.Version; }
         }
 
-        /// <inheritdoc/>
-        public IRisk Risk { get; private set; }
+        /// <summary>Startup banner string suitable for logging or UI display.</summary>
+        public string StartupBanner
+        {
+            get { return StartupBannerCommon.Get(); }
+        }
 
-        /// <inheritdoc/>
-        public ISizing Sizing { get; private set; }
+        /// <summary>
+        /// Accepts a price tick. For now, stores only the last tick; downstream
+        /// consumers can poll or subscribe in future iterations.
+        /// </summary>
+        public void OnPriceTick(DateTime time, double price)
+        {
+            _lastTick = new Tick(time, price);
+            _hasTick = true;
+        }
 
-        /// <inheritdoc/>
-        public IOrders Orders { get; private set; }
+        // --- Internal helpers (intentionally non-public to keep surface minimal) ---
 
-        /// <inheritdoc/>
-        public ISession Session { get; private set; }
+        internal bool TryGetLatestTick(out DateTime time, out double price)
+        {
+            if (!_hasTick)
+            {
+                time = default(DateTime);
+                price = default(double);
+                return false;
+            }
 
-        /// <inheritdoc/>
-        public ITrailing Trailing { get; private set; }
+            time = _lastTick.Time;
+            price = _lastTick.Price;
+            return true;
+        }
 
-        /// <inheritdoc/>
-        public ITelemetry Telemetry { get; private set; }
+        internal struct Tick
+        {
+            public readonly DateTime Time;
+            public readonly double Price;
 
-        /// <inheritdoc/>
-        public IDiagnostics Diagnostics { get; private set; }
-
-        /// <inheritdoc/>
-        public IBacktestHooks Backtest { get; private set; }
+            public Tick(DateTime time, double price)
+            {
+                Time = time;
+                Price = price;
+            }
+        }
     }
 }
