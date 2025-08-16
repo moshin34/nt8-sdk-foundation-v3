@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using NT8.SDK.Abstractions;
 
 namespace NT8.SDK.Common
 {
-    public sealed class SmaCrossSignal : IPriceSignal
+    /// <summary>Minimal SMA crossover signal (portable, no external deps).</summary>
+    public sealed class SmaCrossSignal
     {
         private readonly int _fast, _slow;
         private readonly Queue<double> _fq = new Queue<double>(), _sq = new Queue<double>();
