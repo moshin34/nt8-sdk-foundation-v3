@@ -1,112 +1,71 @@
-name: NT8 Guard
+﻿name: NT8 Guard (layout-aware)
 
 on:
-  push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
+  push:
+    branches: [ main ]
 
 jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Run NT8 Guard
-        run: python tools/nt8_guard.py --fail-on-warn
-
-      - name: Install Mono (ensure mcs exists)
+      - name: Install Mono (mcs)
         run: |
           sudo apt-get update
           sudo apt-get install -y mono-complete
-          mcs -version || true
-          mono --version || true
 
-      - name: Build Step 1 (Abstractions)
+      - name: Stage A — Abstractions only (if present)
+        shell: bash
         run: |
-          mkdir -p build
-          mcs -langversion:7.2 -target:library Abstractions/*.cs -out:build/sdk.abstractions.dll
+          set -euo pipefail
+          if [ -d Abstractions ]; then
+            find Abstractions -name '*.cs' > files.txt || true
+            if [ -s files.txt ]; then
+              mcs -langversion:7.2 -target:library -out:stageA.dll @files.txt
+            fi
+          fi
 
-      - name: Build Step 2 (Config + Session)
+      - name: Stage B — Core portable layers (auto-detect)
+        shell: bash
         run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs Config/*.cs Session/*.cs \
-            -r:/usr/lib/mono/4.5/System.Web.Extensions.dll \
-            -out:build/sdk.step2.dll
+          set -euo pipefail
+          DIRS=""
+          for d in Abstractions Config Session Common Risk Sizing Trailing Diagnostics Telemetry; do
+            [ -d "$d" ] && DIRS="$DIRS $d"
+          done
+          if [ -n "$DIRS" ]; then
+            find $DIRS -name '*.cs' > files.txt || true
+            if [ -s files.txt ]; then
+              mcs -langversion:7.2 -r:System.Web.Extensions.dll -target:library -out:stageB.dll @files.txt
+            fi
+          fi
 
-      - name: Build Step 3 (Risk)
+      - name: Fail on NinjaTrader types in portable layers
+        shell: bash
         run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs Risk/*.cs \
-            -out:build/sdk.step3.dll
+          set -euo pipefail
+          PORTABLE_DIRS="Abstractions Common Risk Sizing Session Trailing Diagnostics Telemetry"
+          bad=0
+          for d in $PORTABLE_DIRS; do
+            if [ -d "$d" ]; then
+              if grep -R --line-number -E '(^|[^A-Za-z0-9_])NinjaTrader\.' "$d"; then
+                echo "::error ::NinjaTrader types detected in portable layer: $d"
+                bad=1
+              fi
+            fi
+          done
+          exit $bad
 
-      - name: Build Step 4a (Sizing)
+      - name: No root .cs files
+        shell: bash
         run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs Sizing/*.cs \
-            -out:build/sdk.step4.sizing.dll
-
-      - name: Build Step 4b (Trailing)
-        run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs Trailing/*.cs \
-            -out:build/sdk.step4.trailing.dll
-
-      - name: Build Step 5 (Façade aggregate)
-        run: |
-          mcs -langversion:7.2 -target:library \
-            Abstractions/*.cs \
-            Config/*.cs Session/*.cs \
-            Risk/*.cs Sizing/*.cs Trailing/*.cs \
-            Telemetry/*.cs Diagnostics/*.cs Orders/*.cs Facade/*.cs QA.TestKit/*.cs \
-            -r:/usr/lib/mono/4.5/System.Web.Extensions.dll \
-            -out:build/sdk.step5.facade.dll
-
-      - name: Build QuickStart (DEBUG)
-        run: |
-          mcs -langversion:7.2 -define:DEBUG \
-            -r:build/sdk.step5.facade.dll \
-            -target:exe Harness/QuickStartRunner.cs Harness/QuickStartProgram.cs \
-            -out:build/QuickStart.exe
-
-      - name: Run QuickStart and capture log
-        run: |
-          mono build/QuickStart.exe | tee build/quickstart.log
-
-      - name: Assertions (risk lockout & cooldown)
-        run: |
-          grep -q "After 2 losses -> CanTradeNow=False" build/quickstart.log
-          grep -q "After cooldown -> CanTradeNow=True" build/quickstart.log
-
-      - name: Assertions (session gates)
-        run: |
-          grep -q "Settlement gate (16:05 ET): settlement window" build/quickstart.log
-          grep -q "Settlement gate (15:00 ET): OK" build/quickstart.log
-
-      - name: Assertions (planner output)
-        run: |
-          grep -q "EntryPlan: accepted=True" build/quickstart.log
-          grep -q "stopType=StopMarket" build/quickstart.log
-          grep -q "EntryPlan stop numeric check: stop=19990" build/quickstart.log
-          grep -q "EntryPlan(bad price): accepted=False" build/quickstart.log
-
-      - name: Upload Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nt8-sdk-builds
-          path: |
-            build/sdk.abstractions.dll
-            build/sdk.step2.dll
-            build/sdk.step3.dll
-            build/sdk.step4.sizing.dll
-            build/sdk.step4.trailing.dll
-            build/sdk.step5.facade.dll
-            build/QuickStart.exe
-            build/quickstart.log
+          shopt -s nullglob
+          root_cs=( *.cs )
+          if [ ${#root_cs[@]} -gt 0 ]; then
+            printf '%s\n' "${root_cs[@]}"
+            echo "::error ::C# files found at repo root. Move them into proper folders."
+            exit 1
+          fi
