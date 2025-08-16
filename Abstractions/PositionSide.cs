@@ -1,6 +1,6 @@
 ﻿namespace NT8.SDK.Abstractions
 {
-    /// <summary>Simple side enumeration for portable layers.</summary>
+    /// <summary>Portable position side for SDK abstractions.</summary>
     public enum PositionSide
     {
         Flat = 0,
