@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
-namespace NT8.SDK.Common
+namespace NT8.SDK.Diagnostics
 {
     /// <summary>
     /// Simple per-symbol P&amp;L tracker with average price accounting.
@@ -110,7 +110,7 @@ namespace NT8.SDK.Common
             {
                 var t = new PnLTracker();
                 t.OnFill("ES", true, 2, 100m, 1m);     // long 2 @100
-                t.OnFill("ES", false, 1, 105m, 1m);    // close 1 @105 → +5
+                t.OnFill("ES", false, 1, 105m, 1m);    // close 1 @105 â†’ +5
                 System.Diagnostics.Debug.Assert(t.Realized("ES") == 5m);
                 System.Diagnostics.Debug.Assert(t.Position("ES") == 1);
                 System.Diagnostics.Debug.Assert(t.Unrealized("ES", 104m, 1m) == 4m);

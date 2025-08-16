@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using NT8.SDK;
 
 namespace NT8.SDK.Trailing

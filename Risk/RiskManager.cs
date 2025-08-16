@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using NT8.SDK;
 
-namespace NT8.SDK.Common
+namespace NT8.SDK.Risk
 {
     /// <summary>
     /// IRisk wrapper that adds enable/disable and manual lockout around an inner risk engine.

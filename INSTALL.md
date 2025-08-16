@@ -7,3 +7,5 @@
    .\tools\build.ps1
    .\tools\test.ps1
 3) Commit & push a PR, and ensure the 'NT8 Guard' workflow is green. Enable branch protection on `main`.
+
+If a local guard fails with 'C# files found at repo root', move the file into the folder matching its namespace.

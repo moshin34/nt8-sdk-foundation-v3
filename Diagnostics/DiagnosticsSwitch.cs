@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using NT8.SDK;
 
-namespace NT8.SDK.Common
+namespace NT8.SDK.Diagnostics
 {
     /// <summary>
     /// Central toggle and allowlist filter for diagnostics and telemetry emission.
