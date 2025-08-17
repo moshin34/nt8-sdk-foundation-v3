@@ -4,6 +4,8 @@ using NinjaTrader.NinjaScript.Strategies;
 using NT8.SDK.Abstractions;
 using NT8.SDK.Facade;
 using NT8.SDK.NT8Bridge;
+using NT8.SDK;
+using NT8.SDK.Risk;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
@@ -13,7 +15,7 @@ namespace NinjaTrader.NinjaScript.Strategies
     /// </summary>
     public class SdkStrategyShell : Strategy
     {
-        private ISdk _sdk;
+        private dynamic _sdk;
 
         protected override void OnStateChange()
         {
@@ -40,6 +42,20 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (_sdk == null || CurrentBar < 0) return;
             _sdk.OnPriceTick(Time[0], Close[0]);
+
+            double currentPnL = 0.0;
+            var plan = new { Order = new OrderIntent(string.Empty, true, 0, OrderIntentType.Market, 0m, string.Empty) };
+
+            var caps = new DailyWeeklyCaps(1000, 3000); // Daily and weekly caps
+            caps.ApplyPnL(currentPnL, Time[0]);
+
+            if (caps.IsDailyLocked(Time[0]) || caps.IsWeeklyLocked(Time[0]))
+            {
+                Print("⚠️ Risk lockout: Trade blocked due to loss caps.");
+                return;
+            }
+
+            _sdk.Orders.Submit(plan.Order);
         }
     }
 }
