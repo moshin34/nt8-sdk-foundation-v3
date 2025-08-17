@@ -1,0 +1,47 @@
+name: Guard & Build
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  guard:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run guard script
+        shell: pwsh
+        run: |
+          if (Test-Path tools/guard.ps1) {
+            pwsh tools/guard.ps1
+          } else {
+            Write-Host "No guard script found; TODO add tools/guard.ps1"
+          }
+      - name: Display QA summary
+        shell: bash
+        run: |
+          echo "📊 QA Summary:"
+          cat qa/summary.json
+
+  build:
+    needs: guard
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+      - name: Restore
+        run: nuget restore SDK.sln
+      - name: Build (Release)
+        run: msbuild SDK.sln /p:Configuration=Release /m
+      - name: Publish sdk.dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-release-binaries
+          path: |
+            **/bin/Release/*.dll
+            **/bin/Release/*.xml
