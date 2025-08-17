@@ -1,0 +1,13 @@
+name-template: v$RESOLVED_VERSION
+tag-template: v$RESOLVED_VERSION
+categories:
+  - title: ⚠️ Breaking Changes
+    labels: [breaking]
+  - title: ✨ Features
+    labels: [enhancement]
+  - title: 🐛 Fixes
+    labels: [bug]
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+template: |
+  ## Changes
+  $CHANGES
