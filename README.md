@@ -134,3 +134,6 @@ Institutional-grade, risk-compliant NinjaTrader 8 SDK for automated futures trad
 - `IRisk.EvaluateEntry` implementations must accept an empty string without throwing.
 - Trailing stop logic must never loosen stops once tightened.
 - Run `python tools/nt8_guard.py --fail-on-warn` and build with `mcs` before sending a pull request.
+
+## Project Labels
+This repo uses standardized labels: `decision`, `docs`, `ci`, `build`, `feature`, `fix`, `bug`, `risk`, `telemetry`, `task`.
