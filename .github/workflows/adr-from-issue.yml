@@ -1,0 +1,57 @@
+name: ADR from Decision Issue
+on:
+  issues:
+    types: [opened, edited, labeled]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+jobs:
+  generate-adr:
+    if: contains(github.event.issue.labels.*.name, 'decision')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Prepare ADR number & slug
+        id: prep
+        run: |
+          mkdir -p adr
+          N=$(ls -1 adr | grep -E '^ADR-[0-9]{4}-' | wc -l | tr -d ' ')
+          NUM=$(printf "%04d" $((N+1)))
+          TITLE="$(echo "${{ github.event.issue.title }}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g;s/^-|-$//g')"
+          FILE="ADR-${NUM}-${TITLE}.md"
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+          echo "num=$NUM" >> $GITHUB_OUTPUT
+      - name: Render ADR file
+        run: |
+          cat > adr/${{ steps.prep.outputs.file }} <<EOF
+# ADR-${{ steps.prep.outputs.num }}: ${{ github.event.issue.title }}
+**Status:** Accepted  
+**Date:** $(date -u +%Y-%m-%d)
+
+## Context
+${{ github.event.issue.body }}
+
+## Decision
+_TL;DR of the decision. Summarize here._
+
+## Consequences
+_Trade-offs and impacts._
+
+## References
+- Source Issue: #${{ github.event.issue.number }}
+EOF
+      - name: Commit ADR
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add adr/
+          git commit -m "docs(ADR): ${{ github.event.issue.title }} (#${{ github.event.issue.number }})" || echo "No changes"
+          git push
+      - name: Comment & close issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} -b "ADR created: \`adr/${{ steps.prep.outputs.file }}\`"
+          gh issue close ${{ github.event.issue.number }} -r completed || true
