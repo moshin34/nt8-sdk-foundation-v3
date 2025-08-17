@@ -1,6 +1,11 @@
 using System;
+
 namespace NT8.SDK
 {
+    /// <summary>
+    /// Build metadata for the SDK facade. Values are taken from CI env vars when present,
+    /// with safe local defaults so builds never fail on missing metadata.
+    /// </summary>
     public static class SdkInfo
     {
         public static string Name => "NT8.SDK.Foundation";
