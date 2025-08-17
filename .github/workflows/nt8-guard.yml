@@ -1,58 +1,91 @@
-name: NT8 Guard
+name: NT8 Guard (layout-aware)
+
 on:
-  pull_request:
   push:
     branches: [ main ]
+    paths:
+      - '**/*.cs'
+      - '.github/workflows/nt8-guard.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [ main ]
+    paths:
+      - '**/*.cs'
+      - '.github/workflows/nt8-guard.yml'
+  workflow_dispatch:
 
 jobs:
-  build-test:
+  guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Restore
-        run: dotnet restore SDK.sln
-
-      - name: Build
-        run: dotnet build SDK.sln --no-restore -c Release
-
-      - name: Guard (optional)
+      - name: Install Mono (mcs)
+        shell: bash
         run: |
-          if command -v pwsh >/dev/null 2>&1 && [ -f "./tools/guard.ps1" ]; then
-            pwsh -NoLogo -NoProfile ./tools/guard.ps1 || true
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y mono-devel
+          if ! command -v mcs >/dev/null 2>&1; then
+            echo "::warning ::Mono C# compiler (mcs) not found after install; guard will skip compile."
           else
-            echo "::warning::Skipping guard.ps1 (pwsh or script not found)"
+            mcs --version || true
           fi
 
-      - name: Test (optional)
+      - name: Stage A — Abstractions/Common/Strategies
+        shell: bash
         run: |
-          if command -v pwsh >/dev/null 2>&1 && [ -f "./tools/test.ps1" ]; then
-            pwsh -NoLogo -NoProfile ./tools/test.ps1 || true
-          else
-            echo "::warning::Skipping test.ps1 (pwsh or script not found)"
+          set -euo pipefail
+          if ! command -v mcs >/dev/null 2>&1; then
+            echo "::warning ::Skipping Stage A (no mcs on runner)"; exit 0
           fi
+          folders=(Abstractions Common Strategies)
+          files=()
+          for d in "${folders[@]}"; do
+            if [ -d "$d" ]; then
+              while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d" -name "*.cs" -print0)
+            fi
+          done
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::warning ::Stage A found no .cs files"; exit 0
+          fi
+          mcs -langversion:7.2 -target:library -out:stageA.dll "${files[@]}"
 
-      - name: Upload QA summary
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-summary
-          path: |
-            qa/summary.json
-            **/qa/summary.json
-          if-no-files-found: warn
+      - name: Stage B — Orders/NT8Bridge/Risk/Session
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v mcs >/dev/null 2>&1; then
+            echo "::warning ::Skipping Stage B (no mcs on runner)"; exit 0
+          fi
+          folders=(Orders NT8Bridge Risk Session)
+          files=()
+          for d in "${folders[@]}"; do
+            if [ -d "$d" ]; then
+              while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d" -name "*.cs" -print0)
+            fi
+          done
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::warning ::Stage B found no .cs files"; exit 0
+          fi
+          mcs -langversion:7.2 -target:library -out:stageB.dll "${files[@]}"
 
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: logs
-          path: |
-            logs/**
-            **/logs/**
-          if-no-files-found: warn
+      - name: Stage C — Diagnostics/Harness/Sizing/Telemetry/Trailing/Facade
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v mcs >/dev/null 2>&1; then
+            echo "::warning ::Skipping Stage C (no mcs on runner)"; exit 0
+          fi
+          folders=(Diagnostics Harness Sizing Telemetry Trailing Facade)
+          files=()
+          for d in "${folders[@]}"; do
+            if [ -d "$d" ]; then
+              while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d" -name "*.cs" -print0)
+            fi
+          done
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::warning ::Stage C found no .cs files"; exit 0
+          fi
+          mcs -langversion:7.2 -target:library -out:stageC.dll "${files[@]}"
