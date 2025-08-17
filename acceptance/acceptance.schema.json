@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["MAR", "MaxDrawdown", "HitRate"],
+  "properties": {
+    "MAR": {
+      "type": "number",
+      "minimum": 0
+    },
+    "MaxDrawdown": {
+      "type": "number",
+      "maximum": 2500
+    },
+    "HitRate": {
+      "type": "number",
+      "minimum": 40
+    }
+  }
+}
