@@ -39,7 +39,7 @@ namespace NT8.SDK
 
         // --- Internal helpers (intentionally non-public to keep surface minimal) ---
 
-        internal bool TryGetLatestTick(out DateTime time, out double price)
+        public bool TryGetLatestTick(out DateTime time, out double price)
         {
             if (!_hasTick)
             {
