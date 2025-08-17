@@ -4,6 +4,8 @@ using NinjaTrader.NinjaScript.Strategies;
 using NT8.SDK.Abstractions;
 using NT8.SDK.Facade;
 using NT8.SDK.NT8Bridge;
+using NT8.SDK.Telemetry;
+using NT8.SDK.Risk;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
@@ -14,6 +16,7 @@ namespace NinjaTrader.NinjaScript.Strategies
     public class SdkStrategyShell : Strategy
     {
         private ISdk _sdk;
+        private DailyWeeklyCaps _caps;
 
         protected override void OnStateChange()
         {
@@ -32,6 +35,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     .WithDefaults()
                     .WithOrders(new Nt8Orders(this))
                     .Build();
+                _caps = new DailyWeeklyCaps(double.MaxValue, double.MaxValue);
                 Print(_sdk.StartupBanner);
             }
         }
@@ -39,6 +43,18 @@ namespace NinjaTrader.NinjaScript.Strategies
         protected override void OnBarUpdate()
         {
             if (_sdk == null || CurrentBar < 0) return;
+
+            double currentPnL = 0;
+            if (_caps != null && (_caps.IsDailyLocked(Time[0]) || _caps.IsWeeklyLocked(Time[0])))
+            {
+                var telemetry = new FileTelemetry("risk.log", "jsonl");
+                telemetry.Emit("RiskLockout", "Trade blocked by Daily or Weekly Cap", new {
+                    date = Time[0],
+                    pnl = currentPnL
+                });
+                return;
+            }
+
             _sdk.OnPriceTick(Time[0], Close[0]);
         }
     }
