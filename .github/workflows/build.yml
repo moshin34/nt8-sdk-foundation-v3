@@ -1,0 +1,29 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build SDK DLL
+        run: msbuild SDK.csproj -p:Configuration=Release
+
+      - name: Package SDK bundle
+        run: |
+          mkdir dist
+          powershell Compress-Archive -Path `
+            bin/Release/net48/NT8.SDK.Compat.dll, `
+            NT8Bridge\*.cs, `
+            Strategies\*Shell*.cs, `
+            README-Compat.md `
+            -DestinationPath dist\nt8-sdk-bundle.zip
