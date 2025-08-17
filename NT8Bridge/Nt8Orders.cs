@@ -1,9 +1,10 @@
-﻿using System;
+using System;
+using NinjaTrader.Cbi;
 using NinjaTrader.NinjaScript;
 using NinjaTrader.NinjaScript.Strategies;
-using NT8.SDK.Abstractions;
+using NT8.SDK;
 
-namespace NT8.SDK.NT8Bridge
+namespace NT8Bridge
 {
     /// <summary>
     /// Thin adapter that implements the portable IOrders interface using a live NinjaTrader Strategy.
@@ -19,20 +20,89 @@ namespace NT8.SDK.NT8Bridge
             _strategy = strategy;
         }
 
-        public void Submit(OrderIntent intent)
+        public OrderIds Submit(OrderIntent intent)
         {
-            // TODO: map intents to actual NT8 order methods (EnterLong/EnterShort/ExitXXX).
-            // Guard-safe placeholder to keep compile green until order routing is wired.
+            _strategy.Print("[Nt8Orders] Submit " + (intent.Signal ?? string.Empty));
+
+            Order order = null;
+
+            if (intent.Type == OrderIntentType.Market)
+            {
+                if (intent.IsLong)
+                    order = _strategy.EnterLong(intent.Quantity, intent.Signal);
+                else
+                    order = _strategy.EnterShort(intent.Quantity, intent.Signal);
+            }
+            else if (intent.Type == OrderIntentType.Limit)
+            {
+                double price = (double)intent.Price;
+                if (intent.IsLong)
+                    order = _strategy.EnterLongLimit(intent.Quantity, price, intent.Signal);
+                else
+                    order = _strategy.EnterShortLimit(intent.Quantity, price, intent.Signal);
+            }
+            else if (intent.Type == OrderIntentType.StopMarket)
+            {
+                double price = (double)intent.Price;
+                if (intent.IsLong)
+                    order = _strategy.EnterLongStopMarket(intent.Quantity, price, intent.Signal);
+                else
+                    order = _strategy.EnterShortStopMarket(intent.Quantity, price, intent.Signal);
+            }
+            else if (intent.Type == OrderIntentType.StopLimit)
+            {
+                double price = (double)intent.Price;
+                if (intent.IsLong)
+                    order = _strategy.EnterLongStopLimit(intent.Quantity, price, price, intent.Signal);
+                else
+                    order = _strategy.EnterShortStopLimit(intent.Quantity, price, price, intent.Signal);
+            }
+
+            if (order != null && !string.IsNullOrEmpty(intent.OcoGroup))
+                order.Oco = intent.OcoGroup;
+
+            string entryId = order != null ? order.OrderId : string.Empty;
+            return new OrderIds(entryId, string.Empty, string.Empty);
         }
 
         public void Modify(OrderIds ids, OrderIntent intent)
         {
-            // TODO: adjust stop/target for provided ids.
+            _strategy.Print("[Nt8Orders] Modify " + ids.EntryId);
+
+            if (intent.Price <= 0)
+                return;
+
+            double price = (double)intent.Price;
+
+            if (intent.Type == OrderIntentType.Limit)
+            {
+                if (!string.IsNullOrEmpty(ids.EntryId))
+                    _strategy.SetProfitTarget(ids.EntryId, CalculationMode.Price, price);
+            }
+            else if (intent.Type == OrderIntentType.StopMarket || intent.Type == OrderIntentType.StopLimit)
+            {
+                if (!string.IsNullOrEmpty(ids.EntryId))
+                    _strategy.SetStopLoss(ids.EntryId, CalculationMode.Price, price, false);
+            }
         }
 
         public void Cancel(OrderIds ids)
         {
-            // TODO: cancel by ids where available; no-op if ids.IsEmpty.
+            _strategy.Print("[Nt8Orders] Cancel " + ids.EntryId + "," + ids.StopId + "," + ids.TargetId);
+            CancelById(ids.EntryId);
+            CancelById(ids.StopId);
+            CancelById(ids.TargetId);
+        }
+
+        private void CancelById(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+                return;
+
+            Order order = _strategy.GetOrder(id);
+            if (order != null)
+                _strategy.CancelOrder(order);
         }
     }
 }
+
