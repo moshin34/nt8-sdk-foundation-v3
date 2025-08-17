@@ -1,0 +1,38 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build (Release, net48)
+        run: msbuild SDK.csproj /t:Build /p:Configuration=Release /v:m
+
+      - name: Upload artifact (NT8.SDK.dll)
+        uses: actions/upload-artifact@v4
+        with:
+          name: NT8.SDK-bin
+          path: bin/Release/net48/**
+
+      - name: Validate QA metrics against acceptance schema
+        run: |
+          npm install -g ajv-cli
+          ajv validate -s acceptance/acceptance.schema.json -d qa/summary.json
