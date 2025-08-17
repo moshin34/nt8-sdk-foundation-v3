@@ -1,0 +1,40 @@
+name: Release on Tag
+on:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: write
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore SDK.sln
+
+      - name: Build
+        run: dotnet build SDK.sln --no-restore -c Release
+
+      - name: Package bundle
+        run: |
+          mkdir -p dist
+          test -f docs/runbook.md || echo "# Runbook" > docs/runbook.md
+          # include QA summary if exists
+          QA_PATH=""
+          if [ -f qa/summary.json ]; then QA_PATH="qa/summary.json"; fi
+          zip -r dist/sdk_bundle.zip ./bin ./docs/runbook.md $QA_PATH 2>/dev/null || true
+
+      - name: Create/Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/sdk_bundle.zip
+            qa/summary.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
