@@ -1,38 +1,98 @@
+using System;
+using System.Collections.Generic;
+
 namespace NT8.SDK.Risk
 {
     /// <summary>
-    /// Simple risk utility that tracks daily and weekly loss caps.
+    /// Tracks realized profit and loss and reports when daily or weekly
+    /// loss caps have been breached.
     /// </summary>
     public sealed class DailyWeeklyCaps
     {
-        private readonly double _dailyCap;
-        private readonly double _weeklyCap;
+        private readonly Dictionary<DateTime, double> _dailyPnL;
+        private readonly object _sync;
 
         /// <summary>Initializes a new instance of the <see cref="DailyWeeklyCaps"/> class.</summary>
-        /// <param name="dailyCap">Maximum allowed loss for the current day.</param>
-        /// <param name="weeklyCap">Maximum allowed loss for the current week.</param>
-        public DailyWeeklyCaps(double dailyCap, double weeklyCap)
+        /// <param name="dailyLimit">Maximum loss allowed per day.</param>
+        /// <param name="weeklyLimit">Maximum loss allowed per week.</param>
+        public DailyWeeklyCaps(double dailyLimit, double weeklyLimit)
         {
-            _dailyCap = dailyCap;
-            _weeklyCap = weeklyCap;
+            DailyLimit = dailyLimit;
+            WeeklyLimit = weeklyLimit;
+            _dailyPnL = new Dictionary<DateTime, double>();
+            _sync = new object();
         }
 
-        /// <summary>True if today's P&amp;L breaches the daily loss cap.</summary>
-        public bool IsDailyLimitBreached(double todayPnL)
+        /// <summary>Gets the configured daily loss limit.</summary>
+        public double DailyLimit { get; private set; }
+
+        /// <summary>Gets the configured weekly loss limit.</summary>
+        public double WeeklyLimit { get; private set; }
+
+        /// <summary>
+        /// Records a realized PnL entry for the specified date.
+        /// </summary>
+        /// <param name="realizedPnL">Amount realized.</param>
+        /// <param name="dateTime">Time of the realization.</param>
+        public void ApplyPnL(double realizedPnL, DateTime dateTime)
         {
-            return _dailyCap > 0 && todayPnL <= -_dailyCap;
+            var day = dateTime.Date;
+            lock (_sync)
+            {
+                double current;
+                if (_dailyPnL.TryGetValue(day, out current))
+                    _dailyPnL[day] = current + realizedPnL;
+                else
+                    _dailyPnL[day] = realizedPnL;
+            }
         }
 
-        /// <summary>True if weekly P&amp;L breaches the weekly loss cap.</summary>
-        public bool IsWeeklyLimitBreached(double weeklyPnL)
+        /// <summary>
+        /// Determines whether the daily loss limit has been breached for the provided date.
+        /// </summary>
+        /// <param name="dt">Date to check.</param>
+        /// <returns>True if the daily loss limit has been exceeded.</returns>
+        public bool IsDailyLocked(DateTime dt)
         {
-            return _weeklyCap > 0 && weeklyPnL <= -_weeklyCap;
+            var day = dt.Date;
+            lock (_sync)
+            {
+                double total;
+                if (_dailyPnL.TryGetValue(day, out total))
+                    return total <= -DailyLimit;
+            }
+
+            return false;
         }
 
-        /// <summary>True if either the daily or weekly limit has been breached.</summary>
-        public bool IsLocked(double todayPnL, double weeklyPnL)
+        /// <summary>
+        /// Determines whether the weekly loss limit has been breached for the provided date.
+        /// </summary>
+        /// <param name="dt">Date to check.</param>
+        /// <returns>True if the weekly loss limit has been exceeded.</returns>
+        public bool IsWeeklyLocked(DateTime dt)
         {
-            return IsDailyLimitBreached(todayPnL) || IsWeeklyLimitBreached(weeklyPnL);
+            var start = GetWeekStart(dt.Date);
+            var end = start.AddDays(7);
+            double total = 0.0;
+
+            lock (_sync)
+            {
+                foreach (var kv in _dailyPnL)
+                {
+                    if (kv.Key >= start && kv.Key < end)
+                        total += kv.Value;
+                }
+            }
+
+            return total <= -WeeklyLimit;
+        }
+
+        private static DateTime GetWeekStart(DateTime date)
+        {
+            int diff = (int)date.DayOfWeek - (int)DayOfWeek.Monday;
+            if (diff < 0) diff += 7;
+            return date.AddDays(-diff);
         }
     }
 }
