@@ -96,4 +96,3 @@ namespace NT8.SDK.Risk
         }
     }
 }
-
