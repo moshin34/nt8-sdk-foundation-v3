@@ -22,6 +22,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 Name = "SdkStrategyShell";
                 Calculate = Calculate.OnEachTick;
             }
+            else if (State == State.Configure)
+            {
+                Print(NT8.SDK.Common.StartupBanner.Get());
+            }
             else if (State == State.DataLoaded)
             {
                 _sdk = new SdkBuilder()
