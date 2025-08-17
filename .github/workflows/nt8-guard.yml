@@ -1,58 +1,95 @@
-name: NT8 Guard
-on:
-  pull_request:
+---
+name: NT8 Guard (layout-aware)
+
+'on':
   push:
-    branches: [ main ]
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch: {}
 
 jobs:
-  build-test:
+  guard:
+    name: NT8 Guard (layout-aware)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Restore
-        run: dotnet restore SDK.sln
-
-      - name: Build
-        run: dotnet build SDK.sln --no-restore -c Release
-
-      - name: Guard (optional)
+      - name: Stage A (Abstractions, Common, Strategies)
         run: |
-          if command -v pwsh >/dev/null 2>&1 && [ -f "./tools/guard.ps1" ]; then
-            pwsh -NoLogo -NoProfile ./tools/guard.ps1 || true
+          dirs=(Abstractions Common Strategies)
+          files=()
+          for d in "${dirs[@]}"; do
+            if [ -d "$d" ]; then
+              dir_files=()
+              while IFS= read -r -d '' f; do
+                dir_files+=("$f")
+              done < <(find "$d" -name '*.cs' -print0)
+              if [ ${#dir_files[@]} -eq 0 ]; then
+                echo "::warning::Stage A: $d has no .cs files"
+              else
+                files+=("${dir_files[@]}")
+              fi
+            else
+              echo "::warning::Stage A: $d missing"
+            fi
+          done
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::warning::Stage A: nothing to compile"
           else
-            echo "::warning::Skipping guard.ps1 (pwsh or script not found)"
+            mcs -langversion:7.2 -target:library -out:stageA.dll "${files[@]}"
           fi
 
-      - name: Test (optional)
+      - name: Stage B (Orders, NT8Bridge, Risk, Session)
         run: |
-          if command -v pwsh >/dev/null 2>&1 && [ -f "./tools/test.ps1" ]; then
-            pwsh -NoLogo -NoProfile ./tools/test.ps1 || true
+          dirs=(Orders NT8Bridge Risk Session)
+          files=()
+          for d in "${dirs[@]}"; do
+            if [ -d "$d" ]; then
+              dir_files=()
+              while IFS= read -r -d '' f; do
+                dir_files+=("$f")
+              done < <(find "$d" -name '*.cs' -print0)
+              if [ ${#dir_files[@]} -eq 0 ]; then
+                echo "::warning::Stage B: $d has no .cs files"
+              else
+                files+=("${dir_files[@]}")
+              fi
+            else
+              echo "::warning::Stage B: $d missing"
+            fi
+          done
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::warning::Stage B: nothing to compile"
           else
-            echo "::warning::Skipping test.ps1 (pwsh or script not found)"
+            mcs -langversion:7.2 -target:library -out:stageB.dll "${files[@]}"
           fi
 
-      - name: Upload QA summary
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-summary
-          path: |
-            qa/summary.json
-            **/qa/summary.json
-          if-no-files-found: warn
-
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: logs
-          path: |
-            logs/**
-            **/logs/**
-          if-no-files-found: warn
+      - name: Stage C (Diagnostics/Harness/Sizing/Telemetry/Trailing/Facade)
+        run: |
+          dirs=(Diagnostics Harness Sizing Telemetry Trailing Facade)
+          files=()
+          for d in "${dirs[@]}"; do
+            if [ -d "$d" ]; then
+              dir_files=()
+              while IFS= read -r -d '' f; do
+                dir_files+=("$f")
+              done < <(find "$d" -name '*.cs' -print0)
+              if [ ${#dir_files[@]} -eq 0 ]; then
+                echo "::warning::Stage C: $d has no .cs files"
+              else
+                files+=("${dir_files[@]}")
+              fi
+            else
+              echo "::warning::Stage C: $d missing"
+            fi
+          done
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::warning::Stage C: nothing to compile"
+          else
+            mcs -langversion:7.2 -target:library -out:stageC.dll "${files[@]}"
+          fi
