@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;               // File, Directory
+using System.Web.Script.Serialization; // JavaScriptSerializer
 using NT8.SDK;                 // SessionKey, IClock, SystemClock
 using NT8.SDK.Config;          // CmeCalendar, CmeCalendarLoader
 
@@ -17,6 +19,11 @@ namespace NT8.SDK.Session
         private readonly IClock _clock;
         private readonly CmeCalendar _calendar;
 
+        private static readonly HashSet<string> SupportedBaseSymbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "ES", "NQ", "CL", "GC"
+        };
+
         public CmeBlackoutService()
             : this(null)
         {
@@ -26,7 +33,65 @@ namespace NT8.SDK.Session
         public CmeBlackoutService(IClock clock)
         {
             _clock = clock ?? SystemClock.Instance;
-            _calendar = CmeCalendarLoader.Load(); // never throws; normalized arrays
+            _calendar = LoadCalendar(); // reads seeds/cme_calendar_*.json
+        }
+
+        private static CmeCalendar LoadCalendar()
+        {
+            var symbols = new Dictionary<string, Dictionary<string, CmeDay>>(StringComparer.OrdinalIgnoreCase);
+            var ser = new JavaScriptSerializer();
+            try
+            {
+                var files = Directory.GetFiles("./seeds", "cme_calendar_*.json");
+                for (int i = 0; i < files.Length; i++)
+                {
+                    var json = File.ReadAllText(files[i]);
+                    if (string.IsNullOrWhiteSpace(json)) continue;
+                    if (json.TrimStart().StartsWith("{"))
+                    {
+                        var cal = ser.Deserialize<CmeCalendar>(json);
+                        if (cal?.Symbols != null) Merge(cal.Symbols);
+                    }
+                    else
+                    {
+                        var calSymbols = ser.Deserialize<CmeSymbol[]>(json);
+                        if (calSymbols != null) Merge(calSymbols);
+                    }
+                }
+            }
+            catch
+            {
+                // ignore any single seed failure
+            }
+
+            var list = new List<CmeSymbol>();
+            foreach (var kv in symbols)
+            {
+                var days = new List<CmeDay>(kv.Value.Values);
+                list.Add(new CmeSymbol { Symbol = kv.Key, Days = days.ToArray() });
+            }
+            return new CmeCalendar { Symbols = list.ToArray() };
+
+            void Merge(IEnumerable<CmeSymbol> src)
+            {
+                foreach (var sym in src)
+                {
+                    if (sym == null || string.IsNullOrEmpty(sym.Symbol) || sym.Days == null) continue;
+                    if (!SupportedBaseSymbols.Contains(sym.Symbol)) continue;
+                    Dictionary<string, CmeDay> dayMap;
+                    if (!symbols.TryGetValue(sym.Symbol, out dayMap))
+                    {
+                        dayMap = new Dictionary<string, CmeDay>(StringComparer.OrdinalIgnoreCase);
+                        symbols[sym.Symbol] = dayMap;
+                    }
+                    for (int d = 0; d < sym.Days.Length; d++)
+                    {
+                        var day = sym.Days[d];
+                        if (day == null || string.IsNullOrEmpty(day.Date)) continue;
+                        dayMap[day.Date] = day; // override duplicates
+                    }
+                }
+            }
         }
 
         /// <summary>Returns blackout windows for the ET date.</summary>
@@ -58,15 +123,26 @@ namespace NT8.SDK.Session
             return new TimeRange(s, e);
         }
 
+        public bool IsBlackout(string symbol, DateTime now)
+        {
+            return IsWithin(now, BlackoutRanges(now, symbol));
+        }
+
+        public bool IsForceFlat(string symbol, DateTime now)
+        {
+            var range = SettlementRange(now, symbol);
+            return range.HasValue && range.Value.Contains(now.TimeOfDay);
+        }
+
+        // Legacy interface contracts
         public bool IsBlackout(DateTime etNow, string symbol)
         {
-            return IsWithin(etNow, BlackoutRanges(etNow, symbol));
+            return IsBlackout(symbol, etNow);
         }
 
         public bool IsSettlementWindow(DateTime etNow, string symbol)
         {
-            var range = SettlementRange(etNow, symbol);
-            return range.HasValue && range.Value.Contains(etNow.TimeOfDay);
+            return IsForceFlat(symbol, etNow);
         }
 
         /// <summary>
@@ -96,9 +172,22 @@ namespace NT8.SDK.Session
             return new DateTime(d.Year, d.Month, d.Day, 16, 0, 0); // TODO VERIFY CME
         }
 
+        private static string NormalizeSymbol(string symbol)
+        {
+            if (string.IsNullOrEmpty(symbol)) return symbol;
+            var up = symbol.ToUpperInvariant();
+            switch (up)
+            {
+                case "MNQ": return "NQ";
+                case "MES": return "ES";
+                default: return up;
+            }
+        }
+
         private CmeDay FindDay(DateTime etNow, string symbol)
         {
-            if (_calendar == null || _calendar.Symbols == null || string.IsNullOrEmpty(symbol))
+            symbol = NormalizeSymbol(symbol);
+            if (_calendar == null || _calendar.Symbols == null || string.IsNullOrEmpty(symbol) || !SupportedBaseSymbols.Contains(symbol))
                 return null;
 
             var date = etNow.ToString("yyyy-MM-dd"); // ET date string
