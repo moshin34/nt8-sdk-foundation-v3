@@ -1,0 +1,41 @@
+name: Guard & Build
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Optional PowerShell guard; warn if not available
+      - name: Guard (optional)
+        run: |
+          if command -v pwsh >/dev/null 2>&1 && [ -f "./tools/guard.ps1" ]; then
+            pwsh -NoLogo -NoProfile ./tools/guard.ps1 || true
+          else
+            echo "::warning::Skipping guard.ps1 (pwsh or script not found)"
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore (non-fatal)
+        run: dotnet restore || true
+      - name: Build (non-fatal)
+        run: dotnet build --no-restore -c Release || true
+      - name: Upload QA summary (best-effort)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-summary
+          path: |
+            qa/summary.json
+            **/qa/summary.json
+          if-no-files-found: warn

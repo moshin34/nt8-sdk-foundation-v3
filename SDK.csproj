@@ -17,6 +17,8 @@
     <Compile Include="Common\SdkVersionInfo.cs" />
     <Compile Include="Common\SmaCrossSignal.cs" />
     <Compile Include="Facade\SdkInfoSurface.cs" />
-    <Compile Include="SdkFacade.cs" />
+    <!-- Explicitly include the namespaced file only -->
+    <Compile Include="Facade\SdkFacade.cs" />
+    <Compile Include="Facade\SdkInfo.cs" />
   </ItemGroup>
 </Project>
