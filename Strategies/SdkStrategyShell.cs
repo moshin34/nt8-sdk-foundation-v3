@@ -3,6 +3,7 @@ using NinjaTrader.NinjaScript;
 using NinjaTrader.NinjaScript.Strategies;
 using NT8.SDK.Abstractions;
 using NT8.SDK.Facade;
+using NT8.SDK.NT8Bridge;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
@@ -23,7 +24,10 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
             else if (State == State.DataLoaded)
             {
-                _sdk = new SdkFacade();
+                _sdk = new SdkBuilder()
+                    .WithDefaults()
+                    .WithOrders(new Nt8Orders(this))
+                    .Build();
                 Print(_sdk.StartupBanner);
             }
         }
