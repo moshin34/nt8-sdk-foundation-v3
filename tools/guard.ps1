@@ -47,3 +47,8 @@ if ($errors.Count) {
 } else {
   Write-Host 'Guard passed.'
 }
+
+if (-not (Test-Path "qa/summary.json")) {
+  Write-Error "Missing QA summary: qa/summary.json"
+  exit 1
+}
