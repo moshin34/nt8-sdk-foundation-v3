@@ -1,0 +1,22 @@
+name: QA Validate
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate QA summary (warn if missing pre go-live)
+        run: |
+          if [ ! -f "qa/summary.json" ] && ! ls **/qa/summary.json >/dev/null 2>&1; then
+            echo "::warning::qa/summary.json not found; skipping validation pre go-live."
+            exit 0
+          fi
+          if ! command -v pwsh >/dev/null 2>&1 || [ ! -f "./tools/validate-qa.ps1" ]; then
+            echo "::warning::PowerShell or tools/validate-qa.ps1 not found; skipping validation."
+            exit 0
+          fi
+          pwsh -NoLogo -NoProfile ./tools/validate-qa.ps1
