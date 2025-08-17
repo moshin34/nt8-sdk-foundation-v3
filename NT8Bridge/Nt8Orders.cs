@@ -13,11 +13,13 @@ namespace NT8Bridge
     public sealed class Nt8Orders : IOrders
     {
         private readonly Strategy _strategy;
+        private readonly dynamic _telemetry;
 
-        public Nt8Orders(Strategy strategy)
+        public Nt8Orders(Strategy strategy, dynamic telemetry = null)
         {
             if (strategy == null) throw new ArgumentNullException("strategy");
             _strategy = strategy;
+            _telemetry = telemetry;
         }
 
         public OrderIds Submit(OrderIntent intent)
@@ -57,6 +59,12 @@ namespace NT8Bridge
                 else
                     order = _strategy.EnterShortStopLimit(intent.Quantity, price, price, intent.Signal);
             }
+
+            _telemetry?.Emit("OrderSubmitted", "New order routed", new {
+                type = intent.Type.ToString(),
+                quantity = intent.Quantity,
+                price = intent.Price
+            });
 
             if (order != null && !string.IsNullOrEmpty(intent.OcoGroup))
                 order.Oco = intent.OcoGroup;
