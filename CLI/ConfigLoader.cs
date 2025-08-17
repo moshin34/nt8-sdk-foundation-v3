@@ -8,6 +8,7 @@ namespace NT8.SDK.CLI
     {
         public double DailyCap { get; set; }
         public double WeeklyCap { get; set; }
+        public double TrailingLimit { get; set; }
 
         public static RiskCapsConfig Load(string path)
         {
@@ -15,7 +16,9 @@ namespace NT8.SDK.CLI
                 throw new FileNotFoundException("Config file not found", path);
 
             var json = File.ReadAllText(path);
-            return JsonConvert.DeserializeObject<RiskCapsConfig>(json);
+            var config = JsonConvert.DeserializeObject<RiskCapsConfig>(json);
+            Console.WriteLine($"✅ Loaded risk caps: Daily={config.DailyCap}, Weekly={config.WeeklyCap}, Trailing={config.TrailingLimit}");
+            return config;
         }
     }
 }
