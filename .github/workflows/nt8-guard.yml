@@ -17,11 +17,14 @@ on:
 jobs:
   guard:
     runs-on: ubuntu-latest
+    # If you already switched to container, keep it. Otherwise uncomment next line and remove Install Mono step.
+    # container: mono:6.12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Mono (mcs)
+      - name: Install Mono (mcs) if not using container
+        if: ${{ !job.container }}
         shell: bash
         run: |
           set -euo pipefail
@@ -33,59 +36,64 @@ jobs:
             mcs --version || true
           fi
 
-      - name: Stage A — Abstractions/Common/Strategies
+      - name: Define helper to gather portable files
+        id: helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          portable_list () {
+            # Args: folder1 folder2 ...
+            files=()
+            for d in "$@"; do
+              [ -d "$d" ] || continue
+              while IFS= read -r -d '' f; do
+                # Exclude files that reference NinjaTrader or NT8.SDK namespaces
+                if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
+                  echo "::warning file=$f::Skipping (non-portable: references NinjaTrader/NT8.SDK)"
+                  continue
+                fi
+                files+=("$f")
+              done < <(find "$d" -type f -name '*.cs' -print0)
+            done
+            printf '%s\0' "${files[@]}" 2>/dev/null || true
+          }
+          export -f portable_list
+
+      - name: Stage A — Abstractions/Common/Strategies (portable only)
         shell: bash
         run: |
           set -euo pipefail
           if ! command -v mcs >/dev/null 2>&1; then
             echo "::warning ::Skipping Stage A (no mcs on runner)"; exit 0
           fi
-          folders=(Abstractions Common Strategies)
-          files=()
-          for d in "${folders[@]}"; do
-            if [ -d "$d" ]; then
-              while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d" -name "*.cs" -print0)
-            fi
-          done
+          mapfile -d '' files < <(bash -lc 'portable_list Abstractions Common Strategies')
           if [ ${#files[@]} -eq 0 ]; then
-            echo "::warning ::Stage A found no .cs files"; exit 0
+            echo "::warning ::Stage A found no portable .cs files"; exit 0
           fi
           mcs -langversion:7.2 -target:library -out:stageA.dll "${files[@]}"
 
-      - name: Stage B — Orders/NT8Bridge/Risk/Session
+      - name: Stage B — Orders/NT8Bridge/Risk/Session (portable only)
         shell: bash
         run: |
           set -euo pipefail
           if ! command -v mcs >/dev/null 2>&1; then
             echo "::warning ::Skipping Stage B (no mcs on runner)"; exit 0
           fi
-          folders=(Orders NT8Bridge Risk Session)
-          files=()
-          for d in "${folders[@]}"; do
-            if [ -d "$d" ]; then
-              while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d" -name "*.cs" -print0)
-            fi
-          done
+          mapfile -d '' files < <(bash -lc 'portable_list Orders NT8Bridge Risk Session')
           if [ ${#files[@]} -eq 0 ]; then
-            echo "::warning ::Stage B found no .cs files"; exit 0
+            echo "::warning ::Stage B found no portable .cs files"; exit 0
           fi
           mcs -langversion:7.2 -target:library -out:stageB.dll "${files[@]}"
 
-      - name: Stage C — Diagnostics/Harness/Sizing/Telemetry/Trailing/Facade
+      - name: Stage C — Diagnostics/Harness/Sizing/Telemetry/Trailing/Facade (portable only)
         shell: bash
         run: |
           set -euo pipefail
           if ! command -v mcs >/dev/null 2>&1; then
             echo "::warning ::Skipping Stage C (no mcs on runner)"; exit 0
           fi
-          folders=(Diagnostics Harness Sizing Telemetry Trailing Facade)
-          files=()
-          for d in "${folders[@]}"; do
-            if [ -d "$d" ]; then
-              while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d" -name "*.cs" -print0)
-            fi
-          done
+          mapfile -d '' files < <(bash -lc 'portable_list Diagnostics Harness Sizing Telemetry Trailing Facade')
           if [ ${#files[@]} -eq 0 ]; then
-            echo "::warning ::Stage C found no .cs files"; exit 0
+            echo "::warning ::Stage C found no portable .cs files"; exit 0
           fi
           mcs -langversion:7.2 -target:library -out:stageC.dll "${files[@]}"
