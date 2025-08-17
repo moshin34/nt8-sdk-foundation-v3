@@ -16,7 +16,7 @@ namespace NinjaTrader.NinjaScript.Strategies
     public class SdkStrategyShell : Strategy
     {
         private ISdk _sdk;
-        private DailyWeeklyCaps _caps;
+        private RiskCaps riskCaps;
 
         protected override void OnStateChange()
         {
@@ -36,7 +36,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     .WithDefaults()
                     .WithOrders(new Nt8Orders(this))
                     .Build();
-                _caps = new DailyWeeklyCaps(double.MaxValue, double.MaxValue);
+                riskCaps = new RiskCaps(double.MaxValue, double.MaxValue, double.MaxValue, 0);
                 Print(_sdk.StartupBanner);
             }
         }
@@ -45,14 +45,9 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (_sdk == null || CurrentBar < 0) return;
 
-            double currentPnL = 0;
-            if (_caps != null && (_caps.IsDailyLocked(Time[0]) || _caps.IsWeeklyLocked(Time[0])))
+            if (riskCaps != null && riskCaps.IsLocked())
             {
-                var telemetry = new FileTelemetry("risk.log", "jsonl");
-                telemetry.Emit("RiskLockout", "Trade blocked by Daily or Weekly Cap", new {
-                    date = Time[0],
-                    pnl = currentPnL
-                });
+                Print("⚠️ Trade skipped: risk cap lockout active.");
                 return;
             }
 
