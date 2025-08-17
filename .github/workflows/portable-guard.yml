@@ -1,70 +1,19 @@
-﻿name: Portable SDK Guard
+name: Portable SDK Guard
 
 on:
   pull_request:
-    branches: [ main ]
-    paths:
-      - "Abstractions/**"
-      - "Common/**"
-      - "Facade/**"
-      - "SdkFacade.cs"
-      - "SDK.csproj"
-      - ".github/workflows/portable-guard.yml"
   push:
     branches: [ main ]
-    paths:
-      - "Abstractions/**"
-      - "Common/**"
-      - "Facade/**"
-      - "SdkFacade.cs"
-      - "SDK.csproj"
-      - ".github/workflows/portable-guard.yml"
-
-concurrency:
-  group: portable-guard-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: windows-latest
+  portable:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # Fast NuGet cache so restore/build are speedy
-      - name: Cache NuGet
-        uses: actions/cache@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          path: ~\AppData\Local\NuGet\Cache
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      # dotnet restore (SDK-style net48 project) 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
+          dotnet-version: '8.0.x'
       - name: Restore
-        run: dotnet restore SDK.csproj
-
-      # Use MSBuild to build Release (no Mono)
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Build (Release, net48)
-        run: msbuild SDK.csproj /t:Build /p:Configuration=Release /v:m
-
-      - name: List outputs
-        shell: pwsh
-        run: |
-          Get-ChildItem -Recurse -File .\bin\Release\net48 | 
-            Select-Object FullName, Length, LastWriteTime | 
-            Format-Table -AutoSize
-
-      - name: Upload artifact (NT8.SDK.dll)
-        uses: actions/upload-artifact@v4
-        with:
-          name: NT8.SDK-bin
-          path: bin/Release/net48/**
+        run: dotnet restore SDK.sln
+      - name: Build
+        run: dotnet build SDK.sln --no-restore -c Release

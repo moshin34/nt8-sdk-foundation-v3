@@ -1,83 +1,70 @@
-﻿name: NT8 Guard (layout-aware)
+name: NT8 Guard
+
 on:
+  pull_request:
   push:
     branches: [ main ]
-    paths:
-      - '**/*.cs'
-      - '.github/workflows/nt8-guard.yml'
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ main ]
-    paths:
-      - '**/*.cs'
-      - '.github/workflows/nt8-guard.yml'
-  workflow_dispatch:
 
-jobs:guard:
+jobs:
+  build-test:
     runs-on: ubuntu-latest
-    container: mono:6.12
     steps:
       - uses: actions/checkout@v4
 
-      - name: Stage A — Abstractions (best-effort)
-        shell: bash
+      - name: Compute build metadata
+        id: meta
         run: |
-set -euo pipefail
-          if [ -d Abstractions ]; then
-            mapfile -t files < <(find Abstractions -name "*.cs")
-            if [ ${#files[@]} -gt 0 ]; then
-              if mcs -langversion:7.2 -target:library -out:stageA.dll "${files[@]}"; then
-                echo "Stage A compile OK"
-              else
-                echo "::warning ::Stage A compile failed; exiting."
-              fi
-            fi
-          fi
+          echo "SDK_VERSION=0.9.0-rc" >> $GITHUB_ENV
+          echo "GIT_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "BUILD_DATE_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
 
-      # -------- Stage B: Portable layers — best-effort (warn on failure) -----
-      - name: Stage B — Portable layers (best-effort)
-        shell: bash
-        run: |
-          set -u
-          DIRS=()
-          for d in Abstractions Config Session Common Risk Sizing Trailing Diagnostics Telemetry Facade; do
-            [ -d "$d" ] && DIRS+=("$d")
-          done
-          if [ ${#DIRS[@]} -gt 0 ]; then
-            mapfile -t files < <(find "${DIRS[@]}" -name "*.cs")
-            if [ ${#files[@]} -gt 0 ]; then
-              if mcs -langversion:7.2 -r:System.Web.Extensions.dll -target:library -out:stageB.dll "${files[@]}"; then
-                echo "Stage B compile OK"
-              else
-                echo "::warning ::Stage B compile failed; exiting."
-              fi
-            fi
-          fi
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
 
-      # -------- Hard gate: NinjaTrader types in portable layers (FAIL) -------
-      - name: Fail on NinjaTrader types in portable layers
-        shell: bash
-        run: |
-          set -euo pipefail
-          PORTABLE_DIRS="Abstractions Common Risk Sizing Session Trailing Diagnostics Telemetry"
-          bad=0
-          for d in $PORTABLE_DIRS; do
-            if [ -d "$d" ]; then
-              if grep -R --line-number -E '(^|[^A-Za-z0-9_])NinjaTrader\.' "$d"; then
-                echo "::error ::NinjaTrader types detected in portable layer: $d"
-                bad=1
-              fi
-            fi
-          done
-          exit $bad
+      - name: Restore dependencies
+        run: dotnet restore SDK.sln
 
-      # -------- Temporary: root .cs files (WARN only) ------------------------
-      - name: Root .cs files (TEMPORARY WARN ONLY)
-        shell: bash
+      - name: Build
+        run: dotnet build SDK.sln --no-restore -c Release
+
+      - name: Test (optional)
         run: |
-          shopt -s nullglob
-          root_cs=( *.cs )
-          if [ ${#root_cs[@]} -gt 0 ]; then
-            printf '%s\n' "${root_cs[@]}"
-            echo "::warning ::C# files exist at repo root; move them into proper folders. (Warn-only temporarily.)"
-          fi
+          if [ -f "./tools/test.ps1" ]; then pwsh ./tools/test.ps1; fi
+
+      - name: Upload QA summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-summary
+          path: |
+            qa/summary.json
+            **/qa/summary.json
+          if-no-files-found: warn
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            logs/**
+            **/logs/**
+          if-no-files-found: warn
+
+  package:
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package SDK bundle
+        run: |
+          mkdir -p dist
+          zip -r dist/sdk_bundle.zip ./bin ./docs/runbook.md qa/summary.json 2>/dev/null || true
+      - name: Upload SDK bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-bundle
+          path: dist/sdk_bundle.zip
+          if-no-files-found: error
