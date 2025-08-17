@@ -1,0 +1,12 @@
+{
+  "Apex": {
+    "MaxDailyLoss": 2500,
+    "MaxTrailingDrawdown": 5000,
+    "EvaluationDurationDays": 10
+  },
+  "Bulenox": {
+    "MaxDailyLoss": 2500,
+    "MaxTrailingDrawdown": 4500,
+    "EvaluationDurationDays": 10
+  }
+}
