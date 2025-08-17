@@ -17,6 +17,7 @@ namespace NinjaTrader.NinjaScript.Strategies
     {
         private ISdk _sdk;
         private DailyWeeklyCaps _caps;
+        private dynamic riskCaps;
 
         protected override void OnStateChange()
         {
@@ -44,6 +45,12 @@ namespace NinjaTrader.NinjaScript.Strategies
         protected override void OnBarUpdate()
         {
             if (_sdk == null || CurrentBar < 0) return;
+
+            if (riskCaps != null && riskCaps.IsLocked())
+            {
+                Print("⚠️ Risk cap lockout active. No trades allowed.");
+                return;
+            }
 
             double currentPnL = 0;
             if (_caps != null && (_caps.IsDailyLocked(Time[0]) || _caps.IsWeeklyLocked(Time[0])))
