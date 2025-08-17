@@ -25,6 +25,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             else if (State == State.Configure)
             {
                 Print(NT8.SDK.Common.StartupBanner.Get());
+                Print($"[NT8 SDK] Starting strategy on {Instrument.FullName} at {Time[0]}");
             }
             else if (State == State.DataLoaded)
             {
