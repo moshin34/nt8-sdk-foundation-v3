@@ -16,10 +16,10 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore || true
+        run: dotnet restore SDK.sln
 
-      - name: Build (non-fatal)
-        run: dotnet build --no-restore -c Release || true
+      - name: Build
+        run: dotnet build SDK.sln --no-restore -c Release
 
       - name: Guard (optional)
         run: |
@@ -56,19 +56,3 @@ jobs:
             logs/**
             **/logs/**
           if-no-files-found: warn
-
-  package:
-    needs: build-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Package SDK bundle
-        run: |
-          mkdir -p dist
-          zip -r dist/sdk_bundle.zip ./bin ./docs/runbook.md qa/summary.json 2>/dev/null || true
-      - name: Upload SDK bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdk-bundle
-          path: dist/sdk_bundle.zip
-          if-no-files-found: error

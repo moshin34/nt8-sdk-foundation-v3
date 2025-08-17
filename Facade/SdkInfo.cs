@@ -1,13 +1,17 @@
-namespace NT8.SDK.Facade
+using System;
+
+namespace NT8.SDK
 {
     /// <summary>
-    /// Lightweight SDK info placeholder to satisfy CI and provide version identity.
+    /// Build metadata for the SDK facade. Values come from CI env vars when present,
+    /// with safe local defaults so builds never fail on missing metadata.
     /// </summary>
     public static class SdkInfo
     {
-        /// <summary>
-        /// Gets the SDK version string.
-        /// </summary>
-        public static string Version => "0.1.0";
+        public static string Name         => "NT8.SDK.Foundation";
+        public static string Version      => Environment.GetEnvironmentVariable("SDK_VERSION")     ?? "0.0.0-dev";
+        public static string Commit       => Environment.GetEnvironmentVariable("GIT_COMMIT")      ?? "dev";
+        public static string BuildDateUtc => Environment.GetEnvironmentVariable("BUILD_DATE_UTC")
+                                             ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
     }
 }
