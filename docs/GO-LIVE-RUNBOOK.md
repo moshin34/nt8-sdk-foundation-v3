@@ -22,7 +22,10 @@
 - Disable `Debug Mode` after validation.
 - Confirm broker connection and instrument mapping in NT8.
 - Start strategy on live account with MaxContracts set conservatively.
+- **Position Sync**: Set Start behavior = **Wait until flat**; ensure account is flat before switching to Live.
 
 Notes:
 - Daily/Weekly PnL baselines approximate via session/week anchors.
 - Replace demo entry with your production signals as needed (logic block in `OnBarUpdate`).
+- Enforcement runs on market data ticks; on breach, working orders are cancelled and (when **UseAccountFlatten = true**) the account is flattened automatically.
+- Manual orders that violate caps while the strategy is enabled will be cancelled/flattened.
