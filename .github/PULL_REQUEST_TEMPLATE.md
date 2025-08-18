@@ -1,14 +1,13 @@
-## What changed?
--
+## Summary
+- Add/modify NinjaScript strategies or related docs.
 
-## Why?
--
+## Checklist
+- [ ] Read `docs/ninjascript_contract.md`
+- [ ] Strategy compiles in **NinjaTrader 8 Editor**
+- [ ] Includes required `using` lines and correct namespace
+- [ ] `OnOrderUpdate` signature matches contract (has `int filled`)
+- [ ] `OnBarUpdate` includes `BarsRequiredToTrade` guard
+- [ ] No async/await, records, init-only, or LINQ query syntax
 
-## How tested?
-- [ ] Guard passed (`powershell .\tools\guard.ps1`)
-- [ ] NT8 compile ok (if NT8Bridge/Strategies touched)
-
-## Risk / Rollback
--
-
-## Screenshots / Logs
+## Notes
+Attach NT8 compile confirmation (optional screenshot).
