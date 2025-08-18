@@ -98,15 +98,63 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         private void TryHookSdk()
         {
-            try {
-                foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+            string[] typeCandidates = new string[]
+            {
+                "NT8.SDK.Abstractions.Risk.PortableRiskManager",
+                "NT8.SDK.Risk.PortableRiskManager",
+                "NT8.SDK.Portable.PortableRiskManager",
+                "NT8.SDK.PortableRiskManager",
+                "SDK.Abstractions.Risk.PortableRiskManager"
+            };
+
+            try
+            {
+                var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+                foreach (var a in assemblies)
                 {
-                    // Expect type name in your existing DLL namespace (adjust if needed)
-                    var t = a.GetType("NT8.SDK.Abstractions.Risk.PortableRiskManager");
-                    if (t != null) { sdk = Activator.CreateInstance(t); sdkEval = t.GetMethod("Evaluate"); useSdk = sdkEval != null; break; }
+                    foreach (var fullName in typeCandidates)
+                    {
+                        var t = a.GetType(fullName, false);
+                        if (t != null)
+                        {
+                            sdk = Activator.CreateInstance(t);
+                            sdkEval = t.GetMethod("Evaluate", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                            useSdk = (sdk != null && sdkEval != null);
+                            if (DebugMode && useSdk) Print("[SDK] Hooked " + fullName + " from " + a.GetName().Name);
+                            if (useSdk) return;
+                        }
+                    }
                 }
-                if (DebugMode) Print(useSdk ? "[SDK] Hooked PortableRiskManager" : "[SDK] Not found; using local evaluator");
-            } catch (Exception ex) { if (DebugMode) Print("[SDK Hook Error] " + ex.Message); useSdk = false; }
+
+                foreach (var a in assemblies)
+                {
+                    var types = a.GetTypes();
+                    for (int i = 0; i < types.Length; i++)
+                    {
+                        var t = types[i];
+                        if (t != null && t.Name == "PortableRiskManager")
+                        {
+                            var m = t.GetMethod("Evaluate", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                            if (m != null)
+                            {
+                                sdk = Activator.CreateInstance(t);
+                                sdkEval = m;
+                                useSdk = (sdk != null);
+                                if (DebugMode && useSdk) Print("[SDK] Hooked by fallback: " + t.FullName + " from " + a.GetName().Name);
+                                if (useSdk) return;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (DebugMode) Print("[SDK Hook Error] " + ex.Message);
+            }
+
+            useSdk = false;
+            if (DebugMode) Print("[SDK] Not found; using local evaluator");
         }
 
         protected override void OnBarUpdate()
