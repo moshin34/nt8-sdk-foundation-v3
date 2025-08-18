@@ -262,7 +262,8 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             try
             {
-                if (Account != null) Account.CancelAllOrders();
+                if (Account != null && Instrument != null)
+                    Account.CancelAllOrders(Instrument);
                 if (UseAccountFlatten && Account != null && PositionAccount != null && PositionAccount.MarketPosition != MarketPosition.Flat)
                     Account.FlattenEverything();
             }
