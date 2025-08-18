@@ -21,6 +21,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - run: dotnet restore SDK.sln || true
-      - run: dotnet build SDK.sln -c Release --no-restore || true
+      - run: dotnet restore SDK.sln
+      - run: dotnet build SDK.sln -c Release --no-restore
       - uses: github/codeql-action/analyze@v3

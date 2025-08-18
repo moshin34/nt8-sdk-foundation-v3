@@ -26,10 +26,17 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Restore (non-fatal)
-        run: dotnet restore || true
-      - name: Build (non-fatal)
-        run: dotnet build --no-restore -c Release || true
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore -c Release
+      - name: Package SDK
+        run: |
+          mkdir -p dist package
+          cp qa/summary.json package/ 2>/dev/null || true
+          find Risk Config -maxdepth 2 -type f \( -name '*.json' -o -name '*.log' -o -name '*.config' \) -exec cp --parents {} package/ \; 2>/dev/null || true
+          cp -r bin/Release package/bin 2>/dev/null || true
+          zip -r dist/SDK.zip package
       - name: Upload QA summary (best-effort)
         if: always()
         uses: actions/upload-artifact@v4
@@ -39,3 +46,9 @@ jobs:
             qa/summary.json
             **/qa/summary.json
           if-no-files-found: warn
+      - name: Upload SDK package
+        uses: actions/upload-artifact@v4
+        with:
+          name: SDK
+          path: dist/SDK.zip
+          if-no-files-found: error
