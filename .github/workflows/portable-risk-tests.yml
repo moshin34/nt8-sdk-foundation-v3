@@ -1,0 +1,31 @@
+name: PortableRiskManager Tests
+
+on:
+  pull_request:
+    paths:
+      - "Abstractions/Risk/**"
+      - "tools/tests/PortableRiskTests.cs"
+      - ".github/workflows/portable-risk-tests.yml"
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install mono
+        run: sudo apt-get update && sudo apt-get install -y mono-devel
+
+      - name: Compile tests with mcs
+        run: |
+          mcs -langversion:7.2 -target:exe -out:PortableRiskTests.exe \
+            Abstractions/Risk/Models.cs \
+            Abstractions/Risk/IRiskManager.cs \
+            Abstractions/Risk/PortableRiskManager.cs \
+            tools/tests/PortableRiskTests.cs
+
+      - name: Run tests with mono
+        run: mono PortableRiskTests.exe
