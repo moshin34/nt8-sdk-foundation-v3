@@ -5,6 +5,7 @@ on:
     paths:
       - "NT8Strategies/**"
       - "tools/package-nt8-import.ps1"
+      - ".github/workflows/nt8-import-pack.yml"
   push:
     tags:
       - "v*.*.*"
@@ -13,21 +14,28 @@ jobs:
   pack:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: NinjaScript Lint (pwsh)
         shell: pwsh
-        run: |
-          ./tools/ninjascript_lint.ps1 -Path NT8Strategies
+        run: ./tools/ninjascript_lint.ps1 -Path NT8Strategies
 
       - name: Package NT8 Import Pack (pwsh)
         shell: pwsh
-        run: |
-          ./tools/package-nt8-import.ps1 -OutDir artifacts -ZipName NT8-Import-Pack.zip
+        run: ./tools/package-nt8-import.ps1 -OutDir artifacts -ZipName NT8-Import-Pack.zip
 
-      - name: Upload Import Pack artifact
+      - name: Upload artifact (always for PR visibility)
         uses: actions/upload-artifact@v4
         with:
           name: NT8-Import-Pack
           path: artifacts/NT8-Import-Pack.zip
+
+      - name: Create Release (on tag only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          prerelease: false
+          files: artifacts/NT8-Import-Pack.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
