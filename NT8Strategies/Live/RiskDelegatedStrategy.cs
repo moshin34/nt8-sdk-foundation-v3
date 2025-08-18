@@ -90,6 +90,14 @@ namespace NinjaTrader.NinjaScript.Strategies
         public double TrailingDrawdown { get; set; }
 
         [NinjaScriptProperty]
+        [Display(Name="UseRiskPreset", Order=8, GroupName="Risk Caps")]
+        public bool UseRiskPreset { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name="PresetFileOverride", Order=9, GroupName="Risk Caps")]
+        public string PresetFileOverride { get; set; }
+
+        [NinjaScriptProperty]
         [Display(Name = "UseAccountFlatten", Order = 5, GroupName = "Diagnostics")]
         public bool UseAccountFlatten { get; set; }
 
@@ -112,6 +120,10 @@ namespace NinjaTrader.NinjaScript.Strategies
         [NinjaScriptProperty, Range(0, 235959)]
         [Display(Name="TradingWindowEnd", Order=22, GroupName="Trading Window")]
         public int TradingWindowEnd { get; set; }   // e.g., 160000 for 16:00:00
+
+        [NinjaScriptProperty]
+        [Display(Name="EnableFileTelemetry", Order=30, GroupName="Telemetry")]
+        public bool EnableFileTelemetry { get; set; }
 
         protected override void OnStateChange()
         {
@@ -137,6 +149,9 @@ namespace NinjaTrader.NinjaScript.Strategies
                 UseTradingWindow = false;
                 TradingWindowStart = 93000;
                 TradingWindowEnd = 160000;
+                EnableFileTelemetry = true;
+                UseRiskPreset = false;
+                PresetFileOverride = string.Empty;
             }
             else if (State == State.Configure)
             {
@@ -146,8 +161,10 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 dayBase = Cum(); weekBase = Cum(); peak = Cum();
                 weekAnchor = WeekAnchor(Time[0].Date);
+                TryLoadPresetIntoCaps();
                 LoadAnchors();
                 TryHookSdk();
+                if (useSdk) LogJsonl("sdk_hook","ok"); else LogJsonl("sdk_hook","fallback");
             }
             else if (State == State.Terminated)
             {
@@ -227,7 +244,13 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (!IsInTradingWindow())
             {
                 if (DebugMode) Print("[Window] Outside trading window. Blocking entries.");
-                try { if (Account != null && Instrument != null) Account.CancelAllOrders(Instrument); } catch {}
+                LogJsonl("window_block","outside");
+                try {
+                    if (Account != null && Instrument != null) {
+                        Account.CancelAllOrders(Instrument);
+                        LogJsonl("risk_action","cancel_all_orders");
+                    }
+                } catch {}
                 return; // skip entries when outside window
             }
 
@@ -250,11 +273,19 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (!IsInTradingWindow())
             {
                 if (DebugMode) Print("[Window] Outside trading window (MD).");
+                LogJsonl("window_block","outside");
                 try
                 {
-                    if (Account != null && Instrument != null) Account.CancelAllOrders(Instrument);
+                    if (Account != null && Instrument != null)
+                    {
+                        Account.CancelAllOrders(Instrument);
+                        LogJsonl("risk_action","cancel_all_orders");
+                    }
                     if (UseAccountFlatten && Account != null && PositionAccount != null && PositionAccount.MarketPosition != MarketPosition.Flat)
+                    {
                         Account.FlattenEverything();
+                        LogJsonl("risk_action","flatten_everything");
+                    }
                 }
                 catch (Exception ex) { if (DebugMode) Print("[Window Flatten Error] " + ex.Message); }
                 return;
@@ -298,15 +329,22 @@ namespace NinjaTrader.NinjaScript.Strategies
             bool breached = d != Decision.Allow;
             if (DebugMode)
                 Print($"[RiskCheck] acctQty={qty} eq={Cum():0.00} peak={peak:0.00} dailyPnL={(Cum()-dayBase):0.00} weeklyPnL={(Cum()-weekBase):0.00} decision={d} breached={breached}");
+            LogJsonl("risk_check", $"qty={qty},eq={Cum():0.00},peak={peak:0.00},dPnL={(Cum()-dayBase):0.00},wPnL={(Cum()-weekBase):0.00},breached={breached}");
 
             if (!breached) return false;
 
             try
             {
                 if (Account != null && Instrument != null)
+                {
                     Account.CancelAllOrders(Instrument);
+                    LogJsonl("risk_action","cancel_all_orders");
+                }
                 if (UseAccountFlatten && Account != null && PositionAccount != null && PositionAccount.MarketPosition != MarketPosition.Flat)
+                {
                     Account.FlattenEverything();
+                    LogJsonl("risk_action","flatten_everything");
+                }
             }
             catch (Exception ex)
             {
@@ -354,6 +392,33 @@ namespace NinjaTrader.NinjaScript.Strategies
             int diff = (int)d.DayOfWeek - (int)DayOfWeek.Monday;
             if (diff < 0) diff += 7;
             return d.AddDays(-diff);
+        }
+
+        private string GetTelemetryPath()
+        {
+            try
+            {
+                var doc = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                var dir = Path.Combine(doc, "NinjaTrader 8", "Logs", "RiskEvents",
+                    (Instrument!=null && Instrument.MasterInstrument!=null)?Instrument.MasterInstrument.Name:"UNKNOWN");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                var file = DateTime.Now.ToString("yyyy-MM-dd") + ".jsonl";
+                return Path.Combine(dir, file);
+            } catch { return null; }
+        }
+        private void LogJsonl(string type, string details)
+        {
+            if (!EnableFileTelemetry) return;
+            try
+            {
+                var path = GetTelemetryPath(); if (string.IsNullOrEmpty(path)) return;
+                var now = DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+                var acct = (Account!=null && !string.IsNullOrEmpty(Account.Name)) ? Account.Name : "UNKN";
+                var instr = (Instrument!=null && Instrument.MasterInstrument!=null)?Instrument.MasterInstrument.Name:"UNKNOWN";
+                details = (details??"").Replace("\"","'");
+                var line = "{\"ts\":\""+now+"\",\"type\":\""+type+"\",\"acct\":\""+acct+"\",\"instr\":\""+instr+"\",\"details\":\""+details+"\"}";
+                File.AppendAllText(path, line + Environment.NewLine);
+            } catch { /* swallow IO */ }
         }
 
         private string GetStoreDir()
@@ -426,6 +491,58 @@ namespace NinjaTrader.NinjaScript.Strategies
                 return double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
             }
             catch { return false; }
+        }
+
+        private string ComputePresetPath()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(PresetFileOverride)) return PresetFileOverride;
+                var symbol = (Instrument!=null && Instrument.MasterInstrument!=null)?Instrument.MasterInstrument.Name:"UNKNOWN";
+                return System.IO.Path.Combine("Config","risk_presets", symbol + ".conservative.json");
+            } catch { return null; }
+        }
+        private bool TryLoadPresetIntoCaps()
+        {
+            try
+            {
+                if (!UseRiskPreset) return false;
+                string path = ComputePresetPath();
+                if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) { if (DebugMode) Print("[Preset] File not found: " + path); return false; }
+
+                var asms = AppDomain.CurrentDomain.GetAssemblies();
+                foreach (var a in asms)
+                {
+                    var t = a.GetType("NT8.SDK.Abstractions.Config.RiskPresetLoader", false);
+                    if (t != null)
+                    {
+                        var m = t.GetMethod("LoadFromFile", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                        if (m != null)
+                        {
+                            var preset = m.Invoke(null, new object[] { path });
+                            if (preset != null)
+                            {
+                                var pt = preset.GetType();
+                                var fMax = pt.GetField("MaxContracts");
+                                var fDaily = pt.GetField("DailyLossLimit");
+                                var fWeekly = pt.GetField("WeeklyLossLimit");
+                                var fTdd = pt.GetField("TrailingDrawdown");
+
+                                if (fMax != null) MaxContracts = (int)fMax.GetValue(preset);
+                                if (fDaily != null) DailyLossLimit = Convert.ToDouble((decimal)fDaily.GetValue(preset));
+                                if (fWeekly != null) WeeklyLossLimit = Convert.ToDouble((decimal)fWeekly.GetValue(preset));
+                                if (fTdd != null) TrailingDrawdown = Convert.ToDouble((decimal)fTdd.GetValue(preset));
+
+                                if (DebugMode) Print("[Preset] Loaded: " + path + $" → Max={MaxContracts}, Daily={DailyLossLimit}, Weekly={WeeklyLossLimit}, TDD={TrailingDrawdown}");
+                                LogJsonl("preset_load", $"path={path}");
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) { if (DebugMode) Print("[Preset Error] " + ex.Message); }
+            return false;
         }
 
         // === Contract signatures ===
