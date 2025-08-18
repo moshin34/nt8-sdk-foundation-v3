@@ -13,20 +13,21 @@ using System.ComponentModel.DataAnnotations;
 namespace NinjaTrader.NinjaScript.Strategies
 {
     /// <summary>
-    /// Risk-capped strategy shell for live/sim trading.
-    /// Enforces MaxContracts, DailyLossLimit, WeeklyLossLimit, and TrailingDrawdown.
-    /// Uses only NinjaScript-safe calls and follows the contract in docs/ninjascript_contract.md.
+    /// Risk-capped strategy with ACCOUNT-LEVEL enforcement.
+    /// Caps: MaxContracts, DailyLossLimit, WeeklyLossLimit, TrailingDrawdown.
+    /// Enforcement: continuous (OnMarketData) + OnBarUpdate.
+    /// Breach: cancel all working orders; optionally flatten account (UseAccountFlatten).
     /// </summary>
     public class RiskCappedStrategy : Strategy
     {
-        // ==== Private fields ====
-        private double startEquity;          // Equity baseline at strategy start (CumProfit at start)
-        private double weekPnLBase;          // CumProfit baseline at start of week
-        private DateTime weekAnchorDate;     // Monday anchor for weekly baseline
-        private double highestEquity;        // Peak equity for trailing DD
+        // Baselines / State
+        private double dayPnLBase;
+        private double weekPnLBase;
+        private DateTime weekAnchorDate;
+        private double highestEquity;
         private bool printedStartup;
 
-        // ==== Parameters (UI) ====
+        // ===== Parameters =====
         [NinjaScriptProperty]
         [Range(1, int.MaxValue)]
         [Display(Name = "MaxContracts", Order = 1, GroupName = "Risk Caps")]
@@ -52,45 +53,47 @@ namespace NinjaTrader.NinjaScript.Strategies
         public bool DebugMode { get; set; }
 
         [NinjaScriptProperty]
+        [Display(Name = "UseAccountFlatten", Order = 6, GroupName = "Diagnostics")]
+        public bool UseAccountFlatten { get; set; }
+
+        [NinjaScriptProperty]
         [Range(1, int.MaxValue)]
-        [Display(Name = "BarsRequiredToTrade", Order = 6, GroupName = "Diagnostics")]
+        [Display(Name = "BarsRequiredToTrade", Order = 7, GroupName = "Diagnostics")]
         public int BarsRequiredToTradeParam { get; set; }
 
-        // ==== State ====
+        // ===== Lifecycle =====
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
             {
                 Name = "RiskCappedStrategy";
-                Description = "Live strategy shell with risk caps (max contracts, daily/weekly loss, trailing DD).";
-                Calculate = Calculate.OnBarClose;
+                Description = "Account-level risk caps with continuous enforcement on market data.";
+                Calculate = Calculate.OnBarClose; // keep per contract/linter
                 IsOverlay = false;
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.AllEntries;
                 IsExitOnSessionCloseStrategy = true;
                 ExitOnSessionCloseSeconds = 30;
+                BarsRequiredToTrade = 20;
 
-                BarsRequiredToTrade = 20;     // engine guard
-                BarsRequiredToTradeParam = 20; // user-visible param (mirrors guard)
-
-                // Sensible defaults (tune in UI)
+                // Defaults
                 MaxContracts = 1;
                 DailyLossLimit = 500.0;
                 WeeklyLossLimit = 1500.0;
                 TrailingDrawdown = 1500.0;
                 DebugMode = false;
+                UseAccountFlatten = true;
+                BarsRequiredToTradeParam = 20;
 
                 printedStartup = false;
             }
             else if (State == State.Configure)
             {
-                // Optional safety: small static stop to prevent runaway in testing
                 SetStopLoss(CalculationMode.Ticks, 10);
             }
             else if (State == State.DataLoaded)
             {
-                // Baselines at strategy start
-                startEquity = GetCumProfit();
+                dayPnLBase = GetCumProfit();
                 weekPnLBase = GetCumProfit();
                 weekAnchorDate = GetWeekAnchor(Time[0].Date);
                 highestEquity = GetCumProfit();
@@ -98,142 +101,129 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (DebugMode && !printedStartup)
                 {
                     Print("=== RiskCappedStrategy initialized ===");
-                    Print("Caps: MaxContracts=" + MaxContracts
-                        + " DailyLossLimit=" + DailyLossLimit
-                        + " WeeklyLossLimit=" + WeeklyLossLimit
-                        + " TrailingDrawdown=" + TrailingDrawdown);
+                    Print("Caps: Max=" + MaxContracts +
+                          " Daily=" + DailyLossLimit +
+                          " Weekly=" + WeeklyLossLimit +
+                          " TDD=" + TrailingDrawdown);
                     printedStartup = true;
                 }
             }
         }
 
-        // ==== Core bar loop ====
+        // Bar loop (entries + periodic enforcement)
         protected override void OnBarUpdate()
         {
             if (CurrentBar < BarsRequiredToTrade) return;
             if (CurrentBar < BarsRequiredToTradeParam) return;
 
-            // Maintain weekly baseline when new week starts
-            if (IsNewSession() && Time[0].Date == GetWeekAnchor(Time[0].Date))
+            MaintainBaselines();
+            UpdatePeak();
+            if (EnforceIfBreached()) return; // hard-block entries
+
+            // Demo entry logic (replace with production signals)
+            int acctQty = Math.Abs(PositionAccount != null ? PositionAccount.Quantity : 0);
+            if (PositionAccount != null && PositionAccount.MarketPosition == MarketPosition.Flat && acctQty < MaxContracts)
             {
-                weekPnLBase = GetCumProfit();
-                weekAnchorDate = GetWeekAnchor(Time[0].Date);
-                if (DebugMode) Print("[WeeklyReset] weekPnLBase=" + weekPnLBase + " anchor=" + weekAnchorDate.ToShortDateString());
+                if (Close[0] > Open[0]) EnterLong("LongEntry");
             }
+        }
 
-            // Update trailing equity peak
-            double equity = GetCumProfit();
-            if (equity > highestEquity)
-                highestEquity = equity;
+        // Tick loop (realtime continuous enforcement regardless of Calculate)
+        protected override void OnMarketData(MarketDataEventArgs e)
+        {
+            if (State != State.Realtime) return; // ignore historical
+            MaintainBaselines();
+            UpdatePeak();
+            EnforceIfBreached();
+        }
 
-            bool breached = IsMaxContractsBreached()
-                            || IsDailyBreached()
-                            || IsWeeklyBreached()
-                            || IsTrailingDrawdownBreached();
+        // ===== Enforcement =====
+        private bool EnforceIfBreached()
+        {
+            int acctQty = Math.Abs(PositionAccount != null ? PositionAccount.Quantity : 0);
+
+            bool breached =
+                (acctQty > MaxContracts) ||
+                IsDailyBreached() ||
+                IsWeeklyBreached() ||
+                IsTrailingDrawdownBreached();
 
             if (DebugMode)
-                Print($"[RiskCheck] eq={equity:0.00} peak={highestEquity:0.00} dailyPnL={GetDailyPnL():0.00} weeklyPnL={GetWeeklyPnL():0.00} breached={breached}");
+                Print($"[RiskCheck] acctQty={acctQty} eq={GetCumProfit():0.00} peak={highestEquity:0.00} dailyPnL={GetDailyPnL():0.00} weeklyPnL={GetWeeklyPnL():0.00} breached={breached}");
 
-            if (breached)
+            if (!breached) return false;
+
+            try
             {
-                // Flatten/avoid new entries
-                if (Position.MarketPosition != MarketPosition.Flat)
-                    ExitLong("RiskExit"); // flat-only shell; extend for shorts if needed
+                if (Account != null)
+                    Account.CancelAllOrders();
 
-                return;
+                if (UseAccountFlatten && Account != null && PositionAccount != null && PositionAccount.MarketPosition != MarketPosition.Flat)
+                    Account.FlattenEverything();
             }
-
-            // ---- Minimal demonstration entry logic ----
-            // Long-on-green bar; purely to show entries under caps; replace with real signals.
-            if (Position.MarketPosition == MarketPosition.Flat)
+            catch (Exception ex)
             {
-                if (Close[0] > Open[0] && !IsMaxContractsBreached())
-                    EnterLong("LongEntry");
+                if (DebugMode) Print("[RiskEnforceError] " + ex.Message);
             }
+            return true;
         }
 
-        // ==== Helpers (NT8-safe, no external deps) ====
-
-        private bool IsMaxContractsBreached()
+        // ===== Baselines / PnL helpers =====
+        private void MaintainBaselines()
         {
-            // Gates only new entries; existing position may be > MaxContracts due to fills/slippage in real NT routing.
-            return Position.Quantity >= MaxContracts;
+            if (Bars == null || CurrentBar < 0) return;
+            if (Bars.IsFirstBarOfSession) dayPnLBase = GetCumProfit();
+            DateTime anchor = GetWeekAnchor(Time[0].Date);
+            if (Bars.IsFirstBarOfSession && Time[0].Date == anchor) weekPnLBase = GetCumProfit();
         }
 
-        private bool IsDailyBreached()
+        private void UpdatePeak()
         {
-            // Daily PnL since midnight/session (approx via date change). For high fidelity use SessionIterator or account events.
-            double dailyPnL = GetDailyPnL();
-            return (-dailyPnL) >= DailyLossLimit; // loss is negative; breach when abs loss >= limit
-        }
-
-        private bool IsWeeklyBreached()
-        {
-            double weeklyPnL = GetWeeklyPnL();
-            return (-weeklyPnL) >= WeeklyLossLimit;
-        }
-
-        private bool IsTrailingDrawdownBreached()
-        {
-            // Trailing DD measured from equity peak
-            double equity = GetCumProfit();
-            double dd = highestEquity - equity;
-            return dd >= TrailingDrawdown;
+            double eq = GetCumProfit();
+            if (eq > highestEquity) highestEquity = eq;
         }
 
         private double GetCumProfit()
         {
-            // NT8-safe cumulative currency PnL
             return SystemPerformance.AllTrades.TradesPerformance.Currency.CumProfit;
         }
 
         private double GetDailyPnL()
         {
-            // Approximate: difference in cumulative profit from start of trading day
-            // We'll anchor to midnight of current day by capturing the value on first bar of the day.
-            // Use Tag storage via SessionIterator alternative: simple reset when date changes.
-            // For robustness, compute baseline on first bar of day.
-            DateTime currentDate = Time[0].Date;
-            // Use State object to store per-day baseline via BarsSinceNewTradingDay
-            // Simpler: derive dailyPnL from cumulative changes since first bar of current date:
-            // We cannot access prior day baseline unless tracked; here we compute by scanning bars of current date’s trades,
-            // but SystemPerformance lacks per-day breakdown. Use a lightweight approximation: daily = CumProfit - dayStartEquity.
-            // We store dayStartEquity in a series keyed by date using static field per strategy instance (safe enough).
-            // To keep things deterministic and compile-safe, approximate dailyPnL as CumProfit - startEquity when date == strategy start;
-            // and when date changed (new session), reset startEquity to current CumProfit.
-            if (Bars.IsFirstBarOfSession)
-            {
-                // Reset daily baseline at start of each session
-                startEquity = GetCumProfit();
-            }
-            return GetCumProfit() - startEquity;
+            return GetCumProfit() - dayPnLBase;
         }
 
         private double GetWeeklyPnL()
         {
-            // Weekly baseline captured at Monday (or first bar of Monday session)
-            if (Bars.IsFirstBarOfSession && Time[0].Date == GetWeekAnchor(Time[0].Date))
-            {
-                weekPnLBase = GetCumProfit();
-            }
             return GetCumProfit() - weekPnLBase;
+        }
+
+        private bool IsDailyBreached()
+        {
+            double daily = GetDailyPnL();
+            return (-daily) >= DailyLossLimit;
+        }
+
+        private bool IsWeeklyBreached()
+        {
+            double weekly = GetWeeklyPnL();
+            return (-weekly) >= WeeklyLossLimit;
+        }
+
+        private bool IsTrailingDrawdownBreached()
+        {
+            double dd = highestEquity - GetCumProfit();
+            return dd >= TrailingDrawdown;
         }
 
         private static DateTime GetWeekAnchor(DateTime date)
         {
-            // Monday as start-of-week
             int diff = (int)date.DayOfWeek - (int)DayOfWeek.Monday;
             if (diff < 0) diff += 7;
             return date.AddDays(-diff);
         }
 
-        private bool IsNewSession()
-        {
-            // True on first bar of a session
-            return Bars.IsFirstBarOfSession;
-        }
-
-        // ==== Order/Execution events (exact signatures per contract) ====
+        // Contract signatures
         protected override void OnOrderUpdate(
             Order order, double limitPrice, double stopPrice, int quantity,
             int filled, double averageFillPrice, OrderState orderState,
