@@ -35,12 +35,12 @@ function Test-File {
     if ($src -notmatch $onOrderSig) { $errors += "OnOrderUpdate signature incorrect (must include int filled in correct position)." }
 
     if ($errors.Count -gt 0) {
-        Write-Host "NinjaScript Lint Failed for $file:"
+        Write-Host "NinjaScript Lint Failed for ${file}:"
         $errors | ForEach-Object { Write-Host " - $_" }
         return $false
     }
 
-    Write-Host "NinjaScript Lint Passed: $file"
+    Write-Host "NinjaScript Lint Passed: ${file}"
     return $true
 }
 
