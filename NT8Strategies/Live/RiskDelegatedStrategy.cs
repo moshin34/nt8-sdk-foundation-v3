@@ -14,15 +14,38 @@ using System.ComponentModel.DataAnnotations;
 namespace NinjaTrader.NinjaScript.Strategies
 {
     /// <summary>
-    /// Thin risk-delegating strategy. If NT8.SDK DLL is referenced, uses SDK PortableRiskManager;
-    /// otherwise falls back to identical local evaluator. Enforcement is continuous via OnMarketData.
+    /// Thin risk-delegating strategy. If an NT8 SDK DLL is referenced, it uses PortableRiskManager;
+    /// otherwise it falls back to an identical local evaluator. Enforcement is continuous via OnMarketData.
+    /// Contract-compliant with our NinjaScript lint.
     /// </summary>
     public class RiskDelegatedStrategy : Strategy
     {
         // === DTO mirrors ===
-        private struct Caps { public int MaxContracts; public decimal DailyLossLimit; public decimal WeeklyLossLimit; public decimal TrailingDrawdown; }
-        private struct Snap { public int AccountQuantity; public decimal Equity; public decimal PeakEquity; public decimal DailyPnL; public decimal WeeklyPnL; }
-        private enum Decision { Allow=0, BlockMaxContracts=1, BlockDailyLoss=2, BlockWeeklyLoss=3, BlockTrailingDD=4 }
+        private struct Caps
+        {
+            public int MaxContracts;
+            public decimal DailyLossLimit;
+            public decimal WeeklyLossLimit;
+            public decimal TrailingDrawdown;
+        }
+
+        private struct Snap
+        {
+            public int AccountQuantity;
+            public decimal Equity;
+            public decimal PeakEquity;
+            public decimal DailyPnL;
+            public decimal WeeklyPnL;
+        }
+
+        private enum Decision
+        {
+            Allow = 0,
+            BlockMaxContracts = 1,
+            BlockDailyLoss = 2,
+            BlockWeeklyLoss = 3,
+            BlockTrailingDD = 4
+        }
 
         // === Local fallback evaluator (identical to SDK logic) ===
         private sealed class LocalEval
@@ -39,39 +62,41 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
 
         // === SDK reflection hook ===
-        private object sdk; private MethodInfo sdkEval; private bool useSdk;
+        private object sdk;
+        private MethodInfo sdkEval;
+        private bool useSdk;
 
         // === State ===
         private double dayBase, weekBase, peak;
         private DateTime weekAnchor;
 
         // === Params ===
-        [NinjaScriptProperty, Range(1,int.MaxValue)]
-        [Display(Name="MaxContracts", Order=1, GroupName="Risk Caps")]
+        [NinjaScriptProperty, Range(1, int.MaxValue)]
+        [Display(Name = "MaxContracts", Order = 1, GroupName = "Risk Caps")]
         public int MaxContracts { get; set; }
 
-        [NinjaScriptProperty, Range(0,double.MaxValue)]
-        [Display(Name="DailyLossLimit", Order=2, GroupName="Risk Caps")]
+        [NinjaScriptProperty, Range(0, double.MaxValue)]
+        [Display(Name = "DailyLossLimit", Order = 2, GroupName = "Risk Caps")]
         public double DailyLossLimit { get; set; }
 
-        [NinjaScriptProperty, Range(0,double.MaxValue)]
-        [Display(Name="WeeklyLossLimit", Order=3, GroupName="Risk Caps")]
+        [NinjaScriptProperty, Range(0, double.MaxValue)]
+        [Display(Name = "WeeklyLossLimit", Order = 3, GroupName = "Risk Caps")]
         public double WeeklyLossLimit { get; set; }
 
-        [NinjaScriptProperty, Range(0,double.MaxValue)]
-        [Display(Name="TrailingDrawdown", Order=4, GroupName="Risk Caps")]
+        [NinjaScriptProperty, Range(0, double.MaxValue)]
+        [Display(Name = "TrailingDrawdown", Order = 4, GroupName = "Risk Caps")]
         public double TrailingDrawdown { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name="UseAccountFlatten", Order=5, GroupName="Diagnostics")]
+        [Display(Name = "UseAccountFlatten", Order = 5, GroupName = "Diagnostics")]
         public bool UseAccountFlatten { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name="Debug Mode", Order=6, GroupName="Diagnostics")]
+        [Display(Name = "Debug Mode", Order = 6, GroupName = "Diagnostics")]
         public bool DebugMode { get; set; }
 
-        [NinjaScriptProperty, Range(1,int.MaxValue)]
-        [Display(Name="BarsRequiredToTrade", Order=7, GroupName="Diagnostics")]
+        [NinjaScriptProperty, Range(1, int.MaxValue)]
+        [Display(Name = "BarsRequiredToTrade", Order = 7, GroupName = "Diagnostics")]
         public int BarsRequiredToTradeParam { get; set; }
 
         protected override void OnStateChange()
@@ -79,8 +104,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (State == State.SetDefaults)
             {
                 Name = "RiskDelegatedStrategy";
-                Description = "Delegates risk to SDK if DLL present; uses identical local fallback otherwise.";
-                Calculate = Calculate.OnBarClose; // linter compliance; we also enforce in OnMarketData
+                Description = "Delegates risk to SDK if DLL present; uses identical local fallback otherwise. Continuous enforcement via OnMarketData.";
+                Calculate = Calculate.OnBarClose; // linter compliance; enforcement also in OnMarketData
                 IsOverlay = false;
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.AllEntries;
@@ -108,7 +133,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
         }
 
-        // Robust SDK discovery across likely namespaces
+        // === Robust SDK discovery across likely namespaces ===
         private void TryHookSdk()
         {
             string[] candidates = new string[]
@@ -123,6 +148,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             try
             {
                 var asms = AppDomain.CurrentDomain.GetAssemblies();
+
                 // Pass 1: exact candidates
                 foreach (var a in asms)
                 {
@@ -139,6 +165,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                         }
                     }
                 }
+
                 // Pass 2: any type named PortableRiskManager with Evaluate(...)
                 foreach (var a in asms)
                 {
@@ -152,7 +179,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                             if (m != null)
                             {
                                 sdk = Activator.CreateInstance(t);
-                                sdkEval = m; useSdk = (sdk != null);
+                                sdkEval = m;
+                                useSdk = (sdk != null);
                                 if (DebugMode && useSdk) Print("[SDK] Hooked by fallback: " + t.FullName + " from " + a.GetName().Name);
                                 if (useSdk) return;
                             }
@@ -164,15 +192,18 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 if (DebugMode) Print("[SDK Hook Error] " + ex.Message);
             }
+
             useSdk = false;
-            if (DebugMode) Print("[SDK] Not found; using local fallback");
+            if (DebugMode) Print("[SDK] Not found; using local evaluator");
         }
 
         protected override void OnBarUpdate()
         {
             if (CurrentBar < BarsRequiredToTrade) return;
             if (CurrentBar < BarsRequiredToTradeParam) return;
-            MaintainAnchors(); UpdatePeak();
+
+            MaintainAnchors();
+            UpdatePeak();
             if (Enforce()) return;
 
             int qty = Math.Abs(PositionAccount != null ? PositionAccount.Quantity : 0);
@@ -185,20 +216,24 @@ namespace NinjaTrader.NinjaScript.Strategies
         protected override void OnMarketData(MarketDataEventArgs e)
         {
             if (State != State.Realtime) return;
-            MaintainAnchors(); UpdatePeak(); Enforce();
+            MaintainAnchors();
+            UpdatePeak();
+            Enforce();
         }
 
         private bool Enforce()
         {
             int qty = Math.Abs(PositionAccount != null ? PositionAccount.Quantity : 0);
 
-            var caps = new Caps {
+            var caps = new Caps
+            {
                 MaxContracts = MaxContracts,
                 DailyLossLimit = (decimal)DailyLossLimit,
                 WeeklyLossLimit = (decimal)WeeklyLossLimit,
                 TrailingDrawdown = (decimal)TrailingDrawdown
             };
-            var snap = new Snap {
+            var snap = new Snap
+            {
                 AccountQuantity = qty,
                 Equity = (decimal)Cum(),
                 PeakEquity = (decimal)peak,
@@ -231,7 +266,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (UseAccountFlatten && Account != null && PositionAccount != null && PositionAccount.MarketPosition != MarketPosition.Flat)
                     Account.FlattenEverything();
             }
-            catch (Exception ex) { if (DebugMode) Print("[RiskEnforceError] " + ex.Message); }
+            catch (Exception ex)
+            {
+                if (DebugMode) Print("[RiskEnforceError] " + ex.Message);
+            }
             return true;
         }
 
@@ -243,13 +281,34 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (Bars.IsFirstBarOfSession && Time[0].Date == wa) weekBase = Cum();
         }
 
-        private void UpdatePeak() { var c = Cum(); if (c > peak) peak = c; }
-        private double Cum() { return SystemPerformance.AllTrades.TradesPerformance.Currency.CumProfit; }
-        private static DateTime WeekAnchor(DateTime d){ int diff=(int)d.DayOfWeek-(int)DayOfWeek.Monday; if (diff<0) diff+=7; return d.AddDays(-diff); }
+        private void UpdatePeak()
+        {
+            var c = Cum();
+            if (c > peak) peak = c;
+        }
 
-        // Contract overrides
-        protected override void OnOrderUpdate(Order order, double limitPrice, double stopPrice, int quantity, int filled, double averageFillPrice, OrderState orderState, DateTime time, ErrorCode error, string nativeError) { }
-        protected override void OnExecutionUpdate(Execution execution, string executionId, double price, int quantity, MarketPosition marketPosition, string orderId, DateTime time) { }
+        private double Cum()
+        {
+            return SystemPerformance.AllTrades.TradesPerformance.Currency.CumProfit;
+        }
+
+        private static DateTime WeekAnchor(DateTime d)
+        {
+            int diff = (int)d.DayOfWeek - (int)DayOfWeek.Monday;
+            if (diff < 0) diff += 7;
+            return d.AddDays(-diff);
+        }
+
+        // === Contract signatures ===
+        protected override void OnOrderUpdate(
+            Order order, double limitPrice, double stopPrice, int quantity,
+            int filled, double averageFillPrice, OrderState orderState,
+            DateTime time, ErrorCode error, string nativeError)
+        { }
+
+        protected override void OnExecutionUpdate(
+            Execution execution, string executionId, double price, int quantity,
+            MarketPosition marketPosition, string orderId, DateTime time)
+        { }
     }
 }
-
