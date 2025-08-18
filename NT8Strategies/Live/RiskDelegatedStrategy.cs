@@ -1,6 +1,8 @@
 #region Using declarations
 using System;
 using System.Reflection;
+using System.IO;
+using System.Globalization;
 using NinjaTrader.Cbi;
 using NinjaTrader.Data;
 using NinjaTrader.Gui.Tools;
@@ -99,6 +101,10 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "BarsRequiredToTrade", Order = 7, GroupName = "Diagnostics")]
         public int BarsRequiredToTradeParam { get; set; }
 
+        [NinjaScriptProperty]
+        [Display(Name="EnableFileTelemetry", Order=30, GroupName="Telemetry")]
+        public bool EnableFileTelemetry { get; set; }
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -120,6 +126,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 UseAccountFlatten = true;
                 DebugMode = false;
                 BarsRequiredToTradeParam = 20;
+                EnableFileTelemetry = true;
             }
             else if (State == State.Configure)
             {
@@ -130,6 +137,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 dayBase = Cum(); weekBase = Cum(); peak = Cum();
                 weekAnchor = WeekAnchor(Time[0].Date);
                 TryHookSdk();
+                if (useSdk) LogJsonl("sdk_hook","ok"); else LogJsonl("sdk_hook","fallback");
             }
         }
 
@@ -197,6 +205,37 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (DebugMode) Print("[SDK] Not found; using local evaluator");
         }
 
+        private string GetTelemetryPath()
+        {
+            try
+            {
+                var doc = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                var dir = Path.Combine(doc, "NinjaTrader 8", "Logs", "RiskEvents", (Instrument!=null && Instrument.MasterInstrument!=null)?Instrument.MasterInstrument.Name:"UNKNOWN");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                var file = DateTime.Now.ToString("yyyy-MM-dd") + ".jsonl";
+                return Path.Combine(dir, file);
+            }
+            catch { return null; }
+        }
+
+        private void LogJsonl(string type, string details)
+        {
+            if (!EnableFileTelemetry) return;
+            try
+            {
+                var path = GetTelemetryPath(); if (string.IsNullOrEmpty(path)) return;
+                var now = DateTime.Now.ToString("o", CultureInfo.InvariantCulture);
+                var acct = (Account!=null && !string.IsNullOrEmpty(Account.Name)) ? Account.Name : "UNKN";
+                var instr = (Instrument!=null && Instrument.MasterInstrument!=null)?Instrument.MasterInstrument.Name:"UNKNOWN";
+                // sanitize details
+                if (details == null) details = "";
+                details = details.Replace("\"","'");
+                var line = "{\"ts\":\""+now+"\",\"type\":\""+type+"\",\"acct\":\""+acct+"\",\"instr\":\""+instr+"\",\"details\":\""+details+"\"}";
+                File.AppendAllText(path, line + Environment.NewLine);
+            }
+            catch { /* swallow IO errors */ }
+        }
+
         protected override void OnBarUpdate()
         {
             if (CurrentBar < BarsRequiredToTrade) return;
@@ -255,6 +294,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
 
             bool breached = d != Decision.Allow;
+            LogJsonl("risk_check", $"qty={qty},eq={Cum():0.00},peak={peak:0.00},dPnL={(Cum()-dayBase):0.00},wPnL={(Cum()-weekBase):0.00},breached={breached}");
             if (DebugMode)
                 Print($"[RiskCheck] acctQty={qty} eq={Cum():0.00} peak={peak:0.00} dailyPnL={(Cum()-dayBase):0.00} weeklyPnL={(Cum()-weekBase):0.00} decision={d} breached={breached}");
 
@@ -263,9 +303,15 @@ namespace NinjaTrader.NinjaScript.Strategies
             try
             {
                 if (Account != null && Instrument != null)
+                {
+                    LogJsonl("risk_action","cancel_all_orders");
                     Account.CancelAllOrders(Instrument);
+                }
                 if (UseAccountFlatten && Account != null && PositionAccount != null && PositionAccount.MarketPosition != MarketPosition.Flat)
+                {
+                    LogJsonl("risk_action","flatten_everything");
                     Account.FlattenEverything();
+                }
             }
             catch (Exception ex)
             {
