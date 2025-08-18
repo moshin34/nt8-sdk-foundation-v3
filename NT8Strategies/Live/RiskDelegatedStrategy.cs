@@ -1,5 +1,7 @@
 #region Using declarations
 using System;
+using System.IO;
+using System.Globalization;
 using System.Reflection;
 using NinjaTrader.Cbi;
 using NinjaTrader.Data;
@@ -129,7 +131,12 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 dayBase = Cum(); weekBase = Cum(); peak = Cum();
                 weekAnchor = WeekAnchor(Time[0].Date);
+                LoadAnchors();
                 TryHookSdk();
+            }
+            else if (State == State.Terminated)
+            {
+                SaveAnchors();
             }
         }
 
@@ -297,6 +304,78 @@ namespace NinjaTrader.NinjaScript.Strategies
             int diff = (int)d.DayOfWeek - (int)DayOfWeek.Monday;
             if (diff < 0) diff += 7;
             return d.AddDays(-diff);
+        }
+
+        private string GetStoreDir()
+        {
+            try
+            {
+                var doc = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                var dir = Path.Combine(doc, "NinjaTrader 8", "RiskAnchors");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                return dir;
+            }
+            catch { return null; }
+        }
+
+        private string GetStorePath()
+        {
+            try
+            {
+                var dir = GetStoreDir();
+                var instr = (Instrument != null && Instrument.MasterInstrument != null) ? Instrument.MasterInstrument.Name : "UNKNOWN";
+                var acct = (Account != null && !string.IsNullOrEmpty(Account.Name)) ? Account.Name : "UNKN";
+                return dir == null ? null : Path.Combine(dir, instr + "_" + acct + ".anchors.json");
+            }
+            catch { return null; }
+        }
+
+        private void LoadAnchors()
+        {
+            try
+            {
+                var path = GetStorePath();
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+                var json = File.ReadAllText(path);
+                double d, w, p;
+                if (TryExtractDouble(json, "\"dayBase\"", out d)) dayBase = d;
+                if (TryExtractDouble(json, "\"weekBase\"", out w)) weekBase = w;
+                if (TryExtractDouble(json, "\"peak\"", out p)) peak = p;
+                if (DebugMode) Print("[Anchors] Loaded " + path + $" dayBase={dayBase:0.00} weekBase={weekBase:0.00} peak={peak:0.00}");
+            }
+            catch (Exception ex) { if (DebugMode) Print("[Anchors Load Error] " + ex.Message); }
+        }
+
+        private void SaveAnchors()
+        {
+            try
+            {
+                var path = GetStorePath();
+                if (string.IsNullOrEmpty(path)) return;
+                var s = "{"
+                      + "\"dayBase\":" + dayBase.ToString(CultureInfo.InvariantCulture) + ","
+                      + "\"weekBase\":" + weekBase.ToString(CultureInfo.InvariantCulture) + ","
+                      + "\"peak\":" + peak.ToString(CultureInfo.InvariantCulture)
+                      + "}";
+                File.WriteAllText(path, s);
+                if (DebugMode) Print("[Anchors] Saved " + path);
+            }
+            catch (Exception ex) { if (DebugMode) Print("[Anchors Save Error] " + ex.Message); }
+        }
+
+        private static bool TryExtractDouble(string json, string key, out double value)
+        {
+            value = 0.0;
+            try
+            {
+                int i = json.IndexOf(key); if (i < 0) return false;
+                i = json.IndexOf(':', i) + 1; if (i <= 0) return false;
+                int j = i;
+                while (j < json.Length && ("-0123456789.eE".IndexOf(json[j]) >= 0)) j++;
+                var s = json.Substring(i, j - i).Trim();
+                return double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+            }
+            catch { return false; }
         }
 
         // === Contract signatures ===
