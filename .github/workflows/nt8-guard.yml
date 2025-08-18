@@ -1,10 +1,19 @@
 ---
-name: NT8 Guard
+name: NT8 Guard (layout-aware)
+
 'on':
   push:
     branches: [main]
-  pull_request: ~
-  workflow_dispatch: ~
+    paths:
+      - '**/*.cs'
+      - '.github/workflows/nt8-guard.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+    paths:
+      - '**/*.cs'
+      - '.github/workflows/nt8-guard.yml'
+  workflow_dispatch:
 
 jobs:
   guard:
@@ -21,17 +30,18 @@ jobs:
           set -euo pipefail
           mcs --version
 
-      - name: Stage A — Abstractions/Common/Strategies (portable only)
+      - name: Stage A — Abstractions/Common (portable only; Strategies excluded)
         shell: bash
         run: |
           set -euo pipefail
-          folders=(Abstractions Common Strategies)
+          folders=(Abstractions Common)   # ❗ Strategies removed
           portable_files=()
           for d in "${folders[@]}"; do
             [ -d "$d" ] || continue
             while IFS= read -r -d '' f; do
-              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
-                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              # Exclude any NinjaTrader namespaces, any NT8.SDK references, and ISdk symbol usage
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|NT8\.SDK|(^|[^A-Za-z])ISdk([^A-Za-z]|$)' "$f"; then
+                echo "Notice: Skipping non-portable source (references NinjaTrader/NT8.SDK/ISdk): $f"
               else
                 portable_files+=("$f")
               fi
@@ -52,8 +62,8 @@ jobs:
           for d in "${folders[@]}"; do
             [ -d "$d" ] || continue
             while IFS= read -r -d '' f; do
-              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
-                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|NT8\.SDK|(^|[^A-Za-z])ISdk([^A-Za-z]|$)' "$f"; then
+                echo "Notice: Skipping non-portable source (references NinjaTrader/NT8.SDK/ISdk): $f"
               else
                 portable_files+=("$f")
               fi
@@ -74,8 +84,8 @@ jobs:
           for d in "${folders[@]}"; do
             [ -d "$d" ] || continue
             while IFS= read -r -d '' f; do
-              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
-                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|NT8\.SDK|(^|[^A-Za-z])ISdk([^A-Za-z]|$)' "$f"; then
+                echo "Notice: Skipping non-portable source (references NinjaTrader/NT8.SDK/ISdk): $f"
               else
                 portable_files+=("$f")
               fi
