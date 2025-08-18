@@ -17,83 +17,80 @@ on:
 jobs:
   guard:
     runs-on: ubuntu-latest
-    # If you already switched to container, keep it. Otherwise uncomment next line and remove Install Mono step.
-    # container: mono:6.12
+    container:
+      image: mono:6.12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Mono (mcs) if not using container
-        if: ${{ !job.container }}
+      - name: Verify mcs
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -y
-          sudo apt-get install -y mono-devel
-          if ! command -v mcs >/dev/null 2>&1; then
-            echo "::warning ::Mono C# compiler (mcs) not found after install; guard will skip compile."
-          else
-            mcs --version || true
-          fi
-
-      - name: Define helper to gather portable files
-        id: helpers
-        shell: bash
-        run: |
-          set -euo pipefail
-          portable_list () {
-            # Args: folder1 folder2 ...
-            files=()
-            for d in "$@"; do
-              [ -d "$d" ] || continue
-              while IFS= read -r -d '' f; do
-                # Exclude files that reference NinjaTrader or NT8.SDK namespaces
-                if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
-                  echo "::warning file=$f::Skipping (non-portable: references NinjaTrader/NT8.SDK)"
-                  continue
-                fi
-                files+=("$f")
-              done < <(find "$d" -type f -name '*.cs' -print0)
-            done
-            printf '%s\0' "${files[@]}" 2>/dev/null || true
-          }
-          export -f portable_list
+          mcs --version
 
       - name: Stage A — Abstractions/Common/Strategies (portable only)
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v mcs >/dev/null 2>&1; then
-            echo "::warning ::Skipping Stage A (no mcs on runner)"; exit 0
+          folders=(Abstractions Common Strategies)
+          portable_files=()
+          for d in "${folders[@]}"; do
+            [ -d "$d" ] || continue
+            while IFS= read -r -d '' f; do
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
+                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              else
+                portable_files+=("$f")
+              fi
+            done < <(find "$d" -type f -name '*.cs' -print0)
+          done
+          if [ ${#portable_files[@]} -eq 0 ]; then
+            echo "::warning ::Stage A found no portable .cs files; skipping compile"
+            exit 0
           fi
-          mapfile -d '' files < <(bash -lc 'portable_list Abstractions Common Strategies')
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::warning ::Stage A found no portable .cs files"; exit 0
-          fi
-          mcs -langversion:7.2 -target:library -out:stageA.dll "${files[@]}"
+          mcs -langversion:7.2 -target:library -out:stageA.dll "${portable_files[@]}"
 
       - name: Stage B — Orders/NT8Bridge/Risk/Session (portable only)
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v mcs >/dev/null 2>&1; then
-            echo "::warning ::Skipping Stage B (no mcs on runner)"; exit 0
+          folders=(Orders NT8Bridge Risk Session)
+          portable_files=()
+          for d in "${folders[@]}"; do
+            [ -d "$d" ] || continue
+            while IFS= read -r -d '' f; do
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
+                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              else
+                portable_files+=("$f")
+              fi
+            done < <(find "$d" -type f -name '*.cs' -print0)
+          done
+          if [ ${#portable_files[@]} -eq 0 ]; then
+            echo "::warning ::Stage B found no portable .cs files; skipping compile"
+            exit 0
           fi
-          mapfile -d '' files < <(bash -lc 'portable_list Orders NT8Bridge Risk Session')
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::warning ::Stage B found no portable .cs files"; exit 0
-          fi
-          mcs -langversion:7.2 -target:library -out:stageB.dll "${files[@]}"
+          mcs -langversion:7.2 -target:library -out:stageB.dll "${portable_files[@]}"
 
       - name: Stage C — Diagnostics/Harness/Sizing/Telemetry/Trailing/Facade (portable only)
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v mcs >/dev/null 2>&1; then
-            echo "::warning ::Skipping Stage C (no mcs on runner)"; exit 0
+          folders=(Diagnostics Harness Sizing Telemetry Trailing Facade)
+          portable_files=()
+          for d in "${folders[@]}"; do
+            [ -d "$d" ] || continue
+            while IFS= read -r -d '' f; do
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
+                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              else
+                portable_files+=("$f")
+              fi
+            done < <(find "$d" -type f -name '*.cs' -print0)
+          done
+          if [ ${#portable_files[@]} -eq 0 ]; then
+            echo "::warning ::Stage C found no portable .cs files; skipping compile"
+            exit 0
           fi
-          mapfile -d '' files < <(bash -lc 'portable_list Diagnostics Harness Sizing Telemetry Trailing Facade')
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::warning ::Stage C found no portable .cs files"; exit 0
-          fi
-          mcs -langversion:7.2 -target:library -out:stageC.dll "${files[@]}"
+          mcs -langversion:7.2 -target:library -out:stageC.dll "${portable_files[@]}"
