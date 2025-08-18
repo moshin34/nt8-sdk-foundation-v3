@@ -99,6 +99,18 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "BarsRequiredToTrade", Order = 7, GroupName = "Diagnostics")]
         public int BarsRequiredToTradeParam { get; set; }
 
+        [NinjaScriptProperty]
+        [Display(Name="UseTradingWindow", Order=20, GroupName="Trading Window")]
+        public bool UseTradingWindow { get; set; }
+
+        [NinjaScriptProperty, Range(0,235959)]
+        [Display(Name="TradingWindowStart", Order=21, GroupName="Trading Window")]
+        public int TradingWindowStart { get; set; }
+
+        [NinjaScriptProperty, Range(0,235959)]
+        [Display(Name="TradingWindowEnd", Order=22, GroupName="Trading Window")]
+        public int TradingWindowEnd { get; set; }
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -120,6 +132,9 @@ namespace NinjaTrader.NinjaScript.Strategies
                 UseAccountFlatten = true;
                 DebugMode = false;
                 BarsRequiredToTradeParam = 20;
+                UseTradingWindow = false;
+                TradingWindowStart = 93000;
+                TradingWindowEnd = 160000;
             }
             else if (State == State.Configure)
             {
@@ -202,6 +217,13 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (CurrentBar < BarsRequiredToTrade) return;
             if (CurrentBar < BarsRequiredToTradeParam) return;
 
+            if (!IsInTradingWindow())
+            {
+                if (DebugMode) Print("[Window] Outside trading window. Blocking entries.");
+                try { if (Account!=null && Instrument!=null) Account.CancelAllOrders(Instrument); } catch {}
+                return;
+            }
+
             MaintainAnchors();
             UpdatePeak();
             if (Enforce()) return;
@@ -218,6 +240,16 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (State != State.Realtime) return;
             MaintainAnchors();
             UpdatePeak();
+            if (!IsInTradingWindow())
+            {
+                if (DebugMode) Print("[Window] Outside trading window (MD).");
+                try {
+                    if (Account!=null && Instrument!=null) Account.CancelAllOrders(Instrument);
+                    if (UseAccountFlatten && Account!=null && PositionAccount!=null && PositionAccount.MarketPosition!=MarketPosition.Flat)
+                        Account.FlattenEverything();
+                } catch (Exception ex) { if (DebugMode) Print("[Window Flatten Error] " + ex.Message); }
+                return;
+            }
             Enforce();
         }
 
@@ -272,6 +304,18 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (DebugMode) Print("[RiskEnforceError] " + ex.Message);
             }
             return true;
+        }
+
+        private bool IsInTradingWindow()
+        {
+            try {
+                if (!UseTradingWindow) return true;
+                int t = ToTime(Time[0]);
+                if (TradingWindowEnd >= TradingWindowStart)
+                    return t >= TradingWindowStart && t <= TradingWindowEnd;
+                else
+                    return (t >= TradingWindowStart) || (t <= TradingWindowEnd);
+            } catch { return true; }
         }
 
         private void MaintainAnchors()
