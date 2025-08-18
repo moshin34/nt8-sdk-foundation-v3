@@ -2,6 +2,7 @@ using System;
 using NT8.SDK.Abstractions;
 using NT8.SDK.Common;
 using StartupBannerCommon = NT8.SDK.Common.StartupBanner;
+using SdkInfoRef = NT8.SDK.SdkInfo;
 
 namespace NT8.SDK
 {
@@ -18,7 +19,7 @@ namespace NT8.SDK
         /// <summary>Semantic SDK version (e.g., 0.1.0).</summary>
         public string SdkVersion
         {
-            get { return SdkInfo.Version; }
+            get { return SdkInfoRef.Version; }
         }
 
         /// <summary>Startup banner string suitable for logging or UI display.</summary>
