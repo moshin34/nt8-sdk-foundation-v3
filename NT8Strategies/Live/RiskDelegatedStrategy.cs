@@ -88,6 +88,14 @@ namespace NinjaTrader.NinjaScript.Strategies
         public double TrailingDrawdown { get; set; }
 
         [NinjaScriptProperty]
+        [Display(Name = "UseRiskPreset", Order = 8, GroupName = "Risk Caps")]
+        public bool UseRiskPreset { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "PresetFileOverride", Order = 9, GroupName = "Risk Caps")]
+        public string PresetFileOverride { get; set; }
+
+        [NinjaScriptProperty]
         [Display(Name = "UseAccountFlatten", Order = 5, GroupName = "Diagnostics")]
         public bool UseAccountFlatten { get; set; }
 
@@ -117,6 +125,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 DailyLossLimit = 500;
                 WeeklyLossLimit = 1500;
                 TrailingDrawdown = 1500;
+                UseRiskPreset = false;
+                PresetFileOverride = string.Empty;
                 UseAccountFlatten = true;
                 DebugMode = false;
                 BarsRequiredToTradeParam = 20;
@@ -129,8 +139,61 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 dayBase = Cum(); weekBase = Cum(); peak = Cum();
                 weekAnchor = WeekAnchor(Time[0].Date);
+                TryLoadPresetIntoCaps();
                 TryHookSdk();
             }
+        }
+
+        // === Risk preset helpers ===
+        private string ComputePresetPath()
+        {
+            try {
+                if (!string.IsNullOrEmpty(PresetFileOverride)) return PresetFileOverride;
+                var symbol = (Instrument!=null && Instrument.MasterInstrument!=null)?Instrument.MasterInstrument.Name:"UNKNOWN";
+                return System.IO.Path.Combine("Config","risk_presets", symbol + ".conservative.json");
+            } catch { return null; }
+        }
+
+        private bool TryLoadPresetIntoCaps()
+        {
+            try
+            {
+                if (!UseRiskPreset) return false;
+                string path = ComputePresetPath();
+                if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) { if (DebugMode) Print("[Preset] File not found: " + path); return false; }
+
+                var asms = AppDomain.CurrentDomain.GetAssemblies();
+                foreach (var a in asms)
+                {
+                    var t = a.GetType("NT8.SDK.Abstractions.Config.RiskPresetLoader", false);
+                    if (t != null)
+                    {
+                        var m = t.GetMethod("LoadFromFile", BindingFlags.Public | BindingFlags.Static);
+                        if (m != null)
+                        {
+                            var preset = m.Invoke(null, new object[] { path });
+                            if (preset != null)
+                            {
+                                var pt = preset.GetType();
+                                var fMax = pt.GetField("MaxContracts");
+                                var fDaily = pt.GetField("DailyLossLimit");
+                                var fWeekly = pt.GetField("WeeklyLossLimit");
+                                var fTdd = pt.GetField("TrailingDrawdown");
+
+                                if (fMax != null) MaxContracts = (int)fMax.GetValue(preset);
+                                if (fDaily != null) DailyLossLimit = Convert.ToDouble((decimal)fDaily.GetValue(preset));
+                                if (fWeekly != null) WeeklyLossLimit = Convert.ToDouble((decimal)fWeekly.GetValue(preset));
+                                if (fTdd != null) TrailingDrawdown = Convert.ToDouble((decimal)fTdd.GetValue(preset));
+
+                                if (DebugMode) Print("[Preset] Loaded caps from " + path + $" → Max={MaxContracts}, Daily={DailyLossLimit}, Weekly={WeeklyLossLimit}, TDD={TrailingDrawdown}");
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) { if (DebugMode) Print("[Preset Error] " + ex.Message); }
+            return false;
         }
 
         // === Robust SDK discovery across likely namespaces ===
