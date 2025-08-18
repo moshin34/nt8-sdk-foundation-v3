@@ -1,10 +1,19 @@
 ---
-name: NT8 Guard
+name: NT8 Guard (layout-aware)
+
 'on':
   push:
     branches: [main]
-  pull_request: ~
-  workflow_dispatch: ~
+    paths:
+      - '**/*.cs'
+      - '.github/workflows/nt8-guard.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+    paths:
+      - '**/*.cs'
+      - '.github/workflows/nt8-guard.yml'
+  workflow_dispatch:
 
 jobs:
   guard:
@@ -21,17 +30,18 @@ jobs:
           set -euo pipefail
           mcs --version
 
-      - name: Stage A — Abstractions/Common/Strategies (portable only)
+      - name: Stage A — Abstractions/Common (portable only; Strategies excluded)
         shell: bash
         run: |
           set -euo pipefail
-          folders=(Abstractions Common Strategies)
+          folders=(Abstractions Common)   # ❗ Strategies removed
           portable_files=()
           for d in "${folders[@]}"; do
             [ -d "$d" ] || continue
             while IFS= read -r -d '' f; do
-              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
-                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              # Exclude any NinjaTrader namespaces, any NT8.SDK references, and ISdk symbol usage
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|NT8\.SDK|(^|[^A-Za-z])ISdk([^A-Za-z]|$)' "$f"; then
+                echo "Notice: Skipping non-portable source (references NinjaTrader/NT8.SDK/ISdk): $f"
               else
                 portable_files+=("$f")
               fi
@@ -41,10 +51,7 @@ jobs:
             echo "::warning ::Stage A found no portable .cs files; skipping compile"
             exit 0
           fi
-          # TEMPORARY: warn-only on compile error to unblock merge; revert to hard-fail after RC
-          if ! mcs -langversion:7.2 -target:library -out:stageA.dll "${portable_files[@]}"; then
-            echo "::warning ::Stage A compile failed (temporary warn-only to unblock PR)"; exit 0
-          fi
+          mcs -langversion:7.2 -target:library -out:stageA.dll "${portable_files[@]}"
 
       - name: Stage B — Orders/NT8Bridge/Risk/Session (portable only)
         shell: bash
@@ -55,8 +62,8 @@ jobs:
           for d in "${folders[@]}"; do
             [ -d "$d" ] || continue
             while IFS= read -r -d '' f; do
-              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
-                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|NT8\.SDK|(^|[^A-Za-z])ISdk([^A-Za-z]|$)' "$f"; then
+                echo "Notice: Skipping non-portable source (references NinjaTrader/NT8.SDK/ISdk): $f"
               else
                 portable_files+=("$f")
               fi
@@ -66,9 +73,7 @@ jobs:
             echo "::warning ::Stage B found no portable .cs files; skipping compile"
             exit 0
           fi
-          if ! mcs -langversion:7.2 -target:library -out:stageB.dll "${portable_files[@]}"; then
-            echo "::warning ::Stage B compile failed (temporary warn-only to unblock PR)"; exit 0
-          fi
+          mcs -langversion:7.2 -target:library -out:stageB.dll "${portable_files[@]}"
 
       - name: Stage C — Diagnostics/Harness/Sizing/Telemetry/Trailing/Facade (portable only)
         shell: bash
@@ -79,8 +84,8 @@ jobs:
           for d in "${folders[@]}"; do
             [ -d "$d" ] || continue
             while IFS= read -r -d '' f; do
-              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|using[[:space:]]+NT8\.SDK\.' "$f"; then
-                echo "::notice file=$f::Skipping non-portable source (references NinjaTrader/NT8.SDK)"
+              if grep -qE 'using[[:space:]]+NinjaTrader|namespace[[:space:]]+NinjaTrader|NT8\.SDK|(^|[^A-Za-z])ISdk([^A-Za-z]|$)' "$f"; then
+                echo "Notice: Skipping non-portable source (references NinjaTrader/NT8.SDK/ISdk): $f"
               else
                 portable_files+=("$f")
               fi
@@ -90,9 +95,7 @@ jobs:
             echo "::warning ::Stage C found no portable .cs files; skipping compile"
             exit 0
           fi
-          if ! mcs -langversion:7.2 -target:library -out:stageC.dll "${portable_files[@]}"; then
-            echo "::warning ::Stage C compile failed (temporary warn-only to unblock PR)"; exit 0
-          fi
+          mcs -langversion:7.2 -target:library -out:stageC.dll "${portable_files[@]}"
 
   build-test:
     # This job exists ONLY to satisfy the required check name: "NT8 Guard / build-test"
